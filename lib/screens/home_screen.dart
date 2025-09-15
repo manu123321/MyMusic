@@ -6,6 +6,8 @@ import '../widgets/song_list_tile.dart';
 import '../widgets/playlist_card.dart';
 import '../widgets/quick_access_section.dart';
 import 'settings_screen.dart';
+import '../models/song.dart';
+import '../models/playlist.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -206,9 +208,10 @@ class HomeScreen extends ConsumerWidget {
             if (songs.isEmpty)
               SliverFillRemaining(
                 child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                       Icon(
                         Icons.music_note,
                         size: 80,
@@ -252,7 +255,8 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         child: const Text('Add Music Files'),
                       ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

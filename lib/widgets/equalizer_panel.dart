@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
+import '../models/playback_settings.dart';
 
 class EqualizerPanel extends ConsumerStatefulWidget {
   const EqualizerPanel({super.key});

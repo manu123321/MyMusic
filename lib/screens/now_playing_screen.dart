@@ -8,6 +8,7 @@ import '../widgets/lyrics_panel.dart';
 import '../widgets/queue_panel.dart';
 import '../widgets/equalizer_panel.dart';
 import '../widgets/sleep_timer_dialog.dart';
+import '../models/playback_settings.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});

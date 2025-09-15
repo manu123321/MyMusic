@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
+import '../models/playlist.dart';
 import '../providers/music_provider.dart';
 import '../services/metadata_service.dart';
 

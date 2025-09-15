@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
+import '../models/playback_settings.dart';
 
 class LyricsPanel extends ConsumerWidget {
   const LyricsPanel({super.key});

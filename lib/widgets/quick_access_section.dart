@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
+import '../models/playlist.dart';
 
 class QuickAccessSection extends ConsumerWidget {
   const QuickAccessSection({super.key});

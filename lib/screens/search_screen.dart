@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
+import '../models/playlist.dart';
+import '../models/song.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -86,7 +88,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildBrowseContent(songs, playlists) {
+  Widget _buildBrowseContent(List<Song> songs, List<Playlist> playlists) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -196,7 +198,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildSearchResults(searchResults, playlistSearchResults) {
+  Widget _buildSearchResults(List<Song> searchResults, List<Playlist> playlistSearchResults) {
     if (searchResults.isEmpty && playlistSearchResults.isEmpty) {
       return Center(
         child: Column(

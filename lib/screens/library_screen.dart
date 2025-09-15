@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
+import '../models/playlist.dart';
+import '../models/song.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -102,7 +104,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _buildPlaylistsTab(playlists) {
+  Widget _buildPlaylistsTab(List<Playlist> playlists) {
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
     final systemPlaylists = playlists.where((p) => p.isSystemPlaylist).toList();
 
@@ -200,7 +202,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _buildSongsTab(songs) {
+  Widget _buildSongsTab(List<Song> songs) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: songs.length,
@@ -216,9 +218,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _buildArtistsTab(songs) {
+  Widget _buildArtistsTab(List<Song> songs) {
     // Group songs by artist
-    final artistMap = <String, List<dynamic>>{};
+    final artistMap = <String, List<Song>>{};
     for (final song in songs) {
       if (!artistMap.containsKey(song.artist)) {
         artistMap[song.artist] = [];
@@ -273,7 +275,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _buildPlaylistTile(playlist) {
+  Widget _buildPlaylistTile(Playlist playlist) {
     return ListTile(
       leading: Container(
         width: 56,

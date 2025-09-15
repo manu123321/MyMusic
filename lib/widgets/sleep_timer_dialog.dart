@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
 import '../services/custom_audio_handler.dart';
+import '../models/playback_settings.dart';
 
 class SleepTimerDialog extends ConsumerStatefulWidget {
   const SleepTimerDialog({super.key});

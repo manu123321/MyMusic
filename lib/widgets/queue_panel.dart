@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
+import '../models/song.dart';
 
 class QueuePanel extends ConsumerWidget {
   const QueuePanel({super.key});

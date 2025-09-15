@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
 import '../models/playback_settings.dart';
+import '../models/song.dart';
+import '../models/playlist.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});

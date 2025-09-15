@@ -5,6 +5,7 @@ import 'search_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/mini_player.dart';
+import '../models/playback_settings.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});

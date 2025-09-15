@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../screens/now_playing_screen.dart';
+import '../models/playback_settings.dart';
 
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key});

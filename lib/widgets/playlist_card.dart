@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../models/playlist.dart';
 
 class PlaylistCard extends StatelessWidget {
   final String title;

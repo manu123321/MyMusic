@@ -6,6 +6,7 @@ import 'services/custom_audio_handler.dart';
 import 'services/storage_service.dart';
 import 'screens/main_screen.dart';
 import 'providers/music_provider.dart';
+import 'models/playback_settings.dart';
 
 late CustomAudioHandler audioHandler;
 

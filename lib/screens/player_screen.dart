@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:intl/intl.dart'; // for formatting
 import '../main.dart'; // access audioHandler
+import '../models/playback_settings.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
