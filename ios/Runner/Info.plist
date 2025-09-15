@@ -54,9 +54,13 @@
 		<string>audio</string>
 	</array>
 	
-	<!-- Media library access -->
-	<key>NSAppleMusicUsageDescription</key>
-	<string>This app needs access to your music library to play your local music files.</string>
+        	<!-- Media library access -->
+        	<key>NSAppleMusicUsageDescription</key>
+        	<string>This app needs access to your music library to play your local music files.</string>
+        	
+        	<!-- Media library access for iOS 9.3+ -->
+        	<key>NSMediaLibraryUsageDescription</key>
+        	<string>This app needs access to your media library to scan for music files.</string>
 	
 	<!-- File access -->
 	<key>NSDocumentsFolderUsageDescription</key>

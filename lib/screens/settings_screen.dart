@@ -117,14 +117,27 @@ class SettingsScreen extends ConsumerWidget {
             'Scan for Music',
             'Find new music files on device',
             Icons.refresh,
-            () {
-              ref.read(songsProvider.notifier).scanDeviceForSongs();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Scanning for music...'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+            () async {
+              final metadataService = ref.read(metadataServiceProvider);
+              final newSongs = await metadataService.scanDeviceForAudioFiles();
+              if (newSongs.isNotEmpty) {
+                for (final song in newSongs) {
+                  await ref.read(songsProvider.notifier).addSong(song);
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Found ${newSongs.length} new music files'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No new music files found'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
             },
           ),
           _buildActionTile(

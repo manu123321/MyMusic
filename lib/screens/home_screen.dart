@@ -6,8 +6,6 @@ import '../widgets/song_list_tile.dart';
 import '../widgets/playlist_card.dart';
 import '../widgets/quick_access_section.dart';
 import 'settings_screen.dart';
-import '../models/song.dart';
-import '../models/playlist.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -17,7 +15,6 @@ class HomeScreen extends ConsumerWidget {
     final songs = ref.watch(songsProvider);
     final playlists = ref.watch(playlistsProvider);
     final recentlyPlayed = ref.watch(songsProvider.notifier).getRecentlyPlayed();
-    final mostPlayed = ref.watch(songsProvider.notifier).getMostPlayed();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -238,11 +235,24 @@ class HomeScreen extends ConsumerWidget {
                       ElevatedButton(
                         onPressed: () async {
                           final metadataService = ref.read(metadataServiceProvider);
-                          final newSongs = await metadataService.pickAudioFiles();
+                          final newSongs = await metadataService.scanDeviceForAudioFiles();
                           if (newSongs.isNotEmpty) {
                             for (final song in newSongs) {
                               await ref.read(songsProvider.notifier).addSong(song);
                             }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Found ${newSongs.length} new music files'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('No new music files found'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -253,7 +263,7 @@ class HomeScreen extends ConsumerWidget {
                             vertical: 16,
                           ),
                         ),
-                        child: const Text('Add Music Files'),
+                        child: const Text('Scan for Music'),
                       ),
                       ],
                     ),

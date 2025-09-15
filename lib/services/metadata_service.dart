@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/song.dart';
 
 class MetadataService {
@@ -10,17 +11,180 @@ class MetadataService {
   factory MetadataService() => _instance;
   MetadataService._internal();
 
-  /// Scan device storage for audio files using file picker
+  /// Scan device storage for audio files
   Future<List<Song>> scanDeviceForAudioFiles() async {
     try {
-      // For now, return empty list - user will need to manually select files
-      // This is a simplified approach to avoid complex permission and metadata issues
-      print('Audio file scanning is simplified - use file picker to add music');
-      return [];
+      // Check permissions first
+      if (!await _checkAndRequestPermissions()) {
+        print('Permissions not granted for media access');
+        return [];
+      }
+
+      List<Song> songs = [];
+      
+      // Get common music directories
+      final musicDirectories = await _getMusicDirectories();
+      
+      for (final directory in musicDirectories) {
+        if (await directory.exists()) {
+          final directorySongs = await _scanDirectory(directory);
+          songs.addAll(directorySongs);
+        }
+      }
+      
+      print('Found ${songs.length} audio files');
+      return songs;
     } catch (e) {
       print('Error scanning device for audio files: $e');
       return [];
     }
+  }
+
+  /// Check and request necessary permissions
+  Future<bool> _checkAndRequestPermissions() async {
+    // For Android 13+ (API 33+), we need READ_MEDIA_AUDIO permission
+    if (Platform.isAndroid) {
+      final status = await Permission.audio.request();
+      if (status.isGranted) {
+        return true;
+      }
+      
+      // Fallback to storage permission for older Android versions
+      final storageStatus = await Permission.storage.request();
+      return storageStatus.isGranted;
+    }
+    
+    // For iOS, we need media library access
+    if (Platform.isIOS) {
+      final status = await Permission.mediaLibrary.request();
+      return status.isGranted;
+    }
+    
+    return false;
+  }
+
+  /// Get common music directories on the device
+  Future<List<Directory>> _getMusicDirectories() async {
+    List<Directory> directories = [];
+    
+    if (Platform.isAndroid) {
+      // Android common music directories
+      final externalStorage = Directory('/storage/emulated/0');
+      if (await externalStorage.exists()) {
+        directories.addAll([
+          Directory('/storage/emulated/0/Music'),
+          Directory('/storage/emulated/0/Download'),
+          Directory('/storage/emulated/0/DCIM'),
+          Directory('/storage/emulated/0/Pictures'),
+        ]);
+      }
+      
+      // Also check external SD card if available
+      final sdCard = Directory('/storage/sdcard1');
+      if (await sdCard.exists()) {
+        directories.addAll([
+          Directory('/storage/sdcard1/Music'),
+          Directory('/storage/sdcard1/Download'),
+        ]);
+      }
+    } else if (Platform.isIOS) {
+      // iOS music directories
+      final documentsDir = await getApplicationDocumentsDirectory();
+      directories.add(documentsDir);
+      
+      // iOS doesn't allow direct access to Music app files,
+      // but we can check Documents and other accessible directories
+    }
+    
+    return directories;
+  }
+
+  /// Recursively scan a directory for audio files
+  Future<List<Song>> _scanDirectory(Directory directory) async {
+    List<Song> songs = [];
+    
+    try {
+      await for (final entity in directory.list(recursive: true)) {
+        if (entity is File && isSupportedAudioFormat(entity.path)) {
+          final song = await _createSongFromFile(entity);
+          if (song != null) {
+            songs.add(song);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error scanning directory ${directory.path}: $e');
+    }
+    
+    return songs;
+  }
+
+  /// Create a Song object from a file
+  Future<Song?> _createSongFromFile(File file) async {
+    try {
+      final fileName = path.basename(file.path);
+      final fileStats = await file.stat();
+      
+      // Extract basic metadata from filename
+      final title = _extractTitleFromFileName(fileName);
+      final artist = _extractArtistFromFileName(fileName);
+      final album = _extractAlbumFromFileName(fileName);
+      
+      final song = Song(
+        id: DateTime.now().millisecondsSinceEpoch.toString() + '_${fileName}',
+        title: title,
+        artist: artist,
+        album: album,
+        filePath: file.path,
+        duration: 0, // Will be determined when playing
+        dateAdded: DateTime.now(),
+        playCount: 0,
+        isLiked: false,
+      );
+      
+      return song;
+    } catch (e) {
+      print('Error creating song from file ${file.path}: $e');
+      return null;
+    }
+  }
+
+  /// Extract artist from filename
+  String _extractArtistFromFileName(String fileName) {
+    final nameWithoutExt = path.basenameWithoutExtension(fileName);
+    
+    // Common patterns: "Artist - Song", "Artist_Song", "Artist.Song"
+    if (nameWithoutExt.contains(' - ')) {
+      return nameWithoutExt.split(' - ')[0].trim();
+    } else if (nameWithoutExt.contains('_')) {
+      final parts = nameWithoutExt.split('_');
+      if (parts.length >= 2) {
+        return parts[0].trim();
+      }
+    } else if (nameWithoutExt.contains('.')) {
+      final parts = nameWithoutExt.split('.');
+      if (parts.length >= 2) {
+        return parts[0].trim();
+      }
+    }
+    
+    return 'Unknown Artist';
+  }
+
+  /// Extract album from filename
+  String _extractAlbumFromFileName(String fileName) {
+    final nameWithoutExt = path.basenameWithoutExtension(fileName);
+    
+    // Try to extract album from directory structure
+    final directory = path.dirname(fileName);
+    final dirName = path.basename(directory);
+    
+    // If directory name looks like an album name, use it
+    if (dirName.isNotEmpty && dirName != 'Music' && dirName != 'Download') {
+      return dirName.replaceAll('_', ' ').replaceAll('-', ' ');
+    }
+    
+    return 'Unknown Album';
   }
 
   /// Pick audio files using file picker

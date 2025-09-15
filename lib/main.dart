@@ -4,9 +4,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'services/simple_audio_handler.dart';
 import 'services/custom_audio_handler.dart';
 import 'services/storage_service.dart';
-import 'screens/main_screen.dart';
+import 'screens/permission_screen.dart';
 import 'providers/music_provider.dart';
-import 'models/playback_settings.dart';
 
 late CustomAudioHandler audioHandler;
 
@@ -64,7 +63,7 @@ class MyApp extends StatelessWidget {
           overlayColor: Colors.white.withValues(alpha: 0.2),
         ),
       ),
-      home: const MainScreen(),
+      home: const PermissionScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
