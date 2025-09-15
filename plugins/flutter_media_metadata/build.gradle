@@ -1,0 +1,25 @@
+group 'com.alexmercerind.flutter_media_metadata'
+version '1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.example.flutter_media_metadata'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+    }
+
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
