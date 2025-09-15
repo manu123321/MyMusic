@@ -32,6 +32,21 @@ class SimpleAudioHandler implements CustomAudioHandler {
   int _currentIndex = 0;
 
   SimpleAudioHandler() {
+    // Initialize with default values
+    _currentSongSubject.add(null);
+    _playbackStateSubject.add(PlaybackState(
+      controls: [],
+      systemActions: const {},
+      androidCompactActionIndices: [],
+      processingState: AudioProcessingState.idle,
+      playing: false,
+      updatePosition: Duration.zero,
+      bufferedPosition: Duration.zero,
+      speed: 1.0,
+      queueIndex: null,
+    ));
+    _queueSubject.add([]);
+    
     _init();
   }
 
@@ -333,6 +348,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
     _playbackStateSubject.add(
       PlaybackState(
         controls: controls,
+        systemActions: const {},
         androidCompactActionIndices: androidCompact,
         processingState: {
           ProcessingState.idle: AudioProcessingState.idle,

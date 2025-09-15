@@ -82,9 +82,6 @@ class HomeScreen extends ConsumerWidget {
                                 title: song.title,
                                 subtitle: song.artist,
                                 imagePath: song.albumArtPath,
-                                onTap: () {
-                                  // Play song
-                                },
                               ),
                             );
                           },
@@ -117,9 +114,6 @@ class HomeScreen extends ConsumerWidget {
                               title: playlist.name,
                               subtitle: '${playlist.songIds.length} songs',
                               imagePath: playlist.coverArtPath,
-                              onTap: () {
-                                // Open playlist
-                              },
                             ),
                           );
                         },
@@ -179,7 +173,7 @@ class HomeScreen extends ConsumerWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final song = songs.take(10).toList()[index];
-                      return AnimationConfiguration.staggeredList(
+                            return AnimationConfiguration.staggeredList(
                         position: index,
                         duration: const Duration(milliseconds: 375),
                         child: SlideAnimation(
@@ -187,9 +181,6 @@ class HomeScreen extends ConsumerWidget {
                           child: FadeInAnimation(
                             child: SongListTile(
                               song: song,
-                              onTap: () {
-                                // Play song
-                              },
                             ),
                           ),
                         ),

@@ -210,9 +210,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         final song = songs[index];
         return SongListTile(
           song: song,
-          onTap: () {
-            // Play song
-          },
         );
       },
     );

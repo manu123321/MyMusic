@@ -186,9 +186,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 final song = songs[index];
                 return SongListTile(
                   song: song,
-                  onTap: () {
-                    // Play song
-                  },
                 );
               },
             ),
@@ -247,9 +244,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           const SizedBox(height: 16),
           ...searchResults.map((song) => SongListTile(
                 song: song,
-                onTap: () {
-                  // Play song
-                },
               )),
           const SizedBox(height: 32),
         ],

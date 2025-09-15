@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:just_audio/just_audio.dart';
 import '../models/song.dart';
 
 class MetadataService {
@@ -123,12 +124,25 @@ class MetadataService {
   Future<Song?> _createSongFromFile(File file) async {
     try {
       final fileName = path.basename(file.path);
-      final fileStats = await file.stat();
       
       // Extract basic metadata from filename
       final title = _extractTitleFromFileName(fileName);
       final artist = _extractArtistFromFileName(fileName);
       final album = _extractAlbumFromFileName(fileName);
+      
+      // Extract duration using just_audio
+      int duration = 0;
+      try {
+        final audioPlayer = AudioPlayer();
+        await audioPlayer.setFilePath(file.path);
+        final durationObj = audioPlayer.duration;
+        if (durationObj != null) {
+          duration = durationObj.inMilliseconds;
+        }
+        await audioPlayer.dispose();
+      } catch (e) {
+        print('Error extracting duration from ${file.path}: $e');
+      }
       
       final song = Song(
         id: DateTime.now().millisecondsSinceEpoch.toString() + '_${fileName}',
@@ -136,7 +150,7 @@ class MetadataService {
         artist: artist,
         album: album,
         filePath: file.path,
-        duration: 0, // Will be determined when playing
+        duration: duration,
         dateAdded: DateTime.now(),
         playCount: 0,
         isLiked: false,
@@ -200,13 +214,27 @@ class MetadataService {
         
         for (PlatformFile file in result.files) {
           if (file.path != null && isSupportedAudioFormat(file.path!)) {
+            // Extract duration using just_audio
+            int duration = 0;
+            try {
+              final audioPlayer = AudioPlayer();
+              await audioPlayer.setFilePath(file.path!);
+              final durationObj = audioPlayer.duration;
+              if (durationObj != null) {
+                duration = durationObj.inMilliseconds;
+              }
+              await audioPlayer.dispose();
+            } catch (e) {
+              print('Error extracting duration from ${file.path}: $e');
+            }
+            
             final song = Song(
               id: DateTime.now().millisecondsSinceEpoch.toString() + '_${file.name}',
               title: _extractTitleFromFileName(file.name),
               artist: 'Unknown Artist',
               album: 'Unknown Album',
               filePath: file.path!,
-              duration: 0, // Will be determined when playing
+              duration: duration,
               dateAdded: DateTime.now(),
               playCount: 0,
               isLiked: false,

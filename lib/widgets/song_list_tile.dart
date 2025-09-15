@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
-import '../models/playlist.dart';
 import '../providers/music_provider.dart';
 import '../services/metadata_service.dart';
+import '../services/custom_audio_handler.dart';
+import '../screens/now_playing_screen.dart';
 
 class SongListTile extends ConsumerWidget {
   final Song song;
@@ -106,8 +108,51 @@ class SongListTile extends ConsumerWidget {
           ),
         ],
       ),
-      onTap: onTap,
+      onTap: onTap ?? () => _playSong(context, ref),
     );
+  }
+
+  Future<void> _playSong(BuildContext context, WidgetRef ref) async {
+    try {
+      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      
+      // Convert song to MediaItem
+      final mediaItem = MediaItem(
+        id: song.filePath,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: Duration(milliseconds: song.duration),
+        artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
+        extras: {
+          'songId': song.id,
+          'trackNumber': song.trackNumber,
+          'year': song.year,
+          'genre': song.genre,
+        },
+      );
+      
+      // Clear current queue and add this song
+      await audioHandler.addQueueItems([mediaItem]);
+      
+      // Start playing
+      await audioHandler.play();
+      
+      // Navigate to now playing screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const NowPlayingScreen(),
+        ),
+      );
+    } catch (e) {
+      print('Error playing song: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error playing song: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _showSongOptions(BuildContext context, WidgetRef ref) {
