@@ -138,26 +138,29 @@ class MiniPlayer extends ConsumerWidget {
                         ),
                       ),
                       
-                      // Play/Pause button only
-                      StreamBuilder<bool>(
-                        stream: audioHandler.playbackState.map((state) => state.playing),
-                        builder: (context, snapshot) {
-                          final isPlaying = snapshot.data ?? false;
-                          return IconButton(
-                            onPressed: () {
-                              if (isPlaying) {
-                                audioHandler.pause();
-                              } else {
-                                audioHandler.play();
-                              }
-                            },
-                            icon: Icon(
-                              isPlaying ? Icons.pause : Icons.play_arrow,
-                              color: Colors.white,
-                            ),
-                            iconSize: 32,
-                          );
-                        },
+                      // Play/Pause button - moved slightly left from edge
+                      Padding(
+                        padding: const EdgeInsets.only(right: 16.0),
+                        child: StreamBuilder<bool>(
+                          stream: audioHandler.playbackState.map((state) => state.playing),
+                          builder: (context, snapshot) {
+                            final isPlaying = snapshot.data ?? false;
+                            return IconButton(
+                              onPressed: () {
+                                if (isPlaying) {
+                                  audioHandler.pause();
+                                } else {
+                                  audioHandler.play();
+                                }
+                              },
+                              icon: Icon(
+                                isPlaying ? Icons.pause : Icons.play_arrow,
+                                color: Colors.white,
+                              ),
+                              iconSize: 32,
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),
