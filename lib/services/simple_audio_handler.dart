@@ -193,6 +193,25 @@ class SimpleAudioHandler implements CustomAudioHandler {
     }
   }
 
+  Future<void> _addMoreSongsToQueueForSingleSong() async {
+    try {
+      // Get all songs from storage
+      final allSongs = _storageService.getAllSongs();
+      
+      // Get songs that are not the currently selected song
+      final currentSongId = _currentSongs.first.id;
+      final remainingSongs = allSongs.where((s) => s.id != currentSongId).toList();
+      
+      if (remainingSongs.isNotEmpty) {
+        // Add up to 20 more songs to the queue for continuous playback
+        final songsToAdd = remainingSongs.take(20).toList();
+        _currentSongs.addAll(songsToAdd);
+      }
+    } catch (e) {
+      print('Error adding more songs to queue for single song: $e');
+    }
+  }
+
   MediaItem _songToMediaItem(Song song) {
     return MediaItem(
       id: song.filePath,
@@ -254,17 +273,23 @@ class SimpleAudioHandler implements CustomAudioHandler {
       final songs = items.map((item) => _mediaItemToSong(item)).toList();
       _currentSongs.addAll(songs);
       
-      // Update queue subject
-      _queueSubject.add(items);
+      // If only one song is selected, add more songs from library for continuous playback
+      if (items.length == 1) {
+        await _addMoreSongsToQueueForSingleSong();
+      }
+      
+      // Update queue subject with current songs
+      final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
+      _queueSubject.add(currentMediaItems);
       
       // Create audio sources and set up player
-      final sources = items.map((m) => AudioSource.uri(Uri.parse(m.id))).toList();
+      final sources = _currentSongs.map((song) => AudioSource.uri(Uri.parse(song.filePath))).toList();
       await _playlist.addAll(sources);
       await _player.setAudioSource(_playlist, initialIndex: 0);
       
       // Set the first song as current
       _currentIndex = 0;
-      _currentSongSubject.add(items.first);
+      _currentSongSubject.add(_songToMediaItem(_currentSongs.first));
       
       // Save queue to storage
       await _saveQueue();
