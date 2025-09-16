@@ -289,6 +289,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref.read(storageServiceProvider).addToRecentlyPlayed(song.id);
       await ref.read(storageServiceProvider).updateSongPlayCount(song.id);
       
+      // Small delay to ensure the player is ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       // Navigate to now playing screen
       Navigator.of(context).push(
         MaterialPageRoute(

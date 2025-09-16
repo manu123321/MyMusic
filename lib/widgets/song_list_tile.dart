@@ -142,6 +142,9 @@ class SongListTile extends ConsumerWidget {
       await audioHandler.seek(Duration.zero);
       await audioHandler.play();
       
+      // Small delay to ensure the player is ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       // Navigate to now playing screen
       Navigator.of(context).push(
         MaterialPageRoute(

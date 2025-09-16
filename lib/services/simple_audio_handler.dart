@@ -186,7 +186,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
     final sources = items.map((m) => AudioSource.uri(Uri.parse(m.id))).toList();
     await _playlist.addAll(sources);
 
-    if (_player.audioSource == null) {
+    if (_player.audioSource == null || _currentSongs.isEmpty) {
       await _player.setAudioSource(_playlist, initialIndex: 0);
     }
 
@@ -213,7 +213,24 @@ class SimpleAudioHandler implements CustomAudioHandler {
   Future<void> setQueue(List<MediaItem> items) async {
     await clearQueue();
     if (items.isNotEmpty) {
-      await addQueueItems(items);
+      // Convert MediaItems to Songs and add to internal list
+      final songs = items.map((item) => _mediaItemToSong(item)).toList();
+      _currentSongs.addAll(songs);
+      
+      // Update queue subject
+      _queueSubject.add(items);
+      
+      // Create audio sources and set up player
+      final sources = items.map((m) => AudioSource.uri(Uri.parse(m.id))).toList();
+      await _playlist.addAll(sources);
+      await _player.setAudioSource(_playlist, initialIndex: 0);
+      
+      // Set the first song as current
+      _currentIndex = 0;
+      _currentSongSubject.add(items.first);
+      
+      // Save queue to storage
+      await _saveQueue();
     }
   }
 
