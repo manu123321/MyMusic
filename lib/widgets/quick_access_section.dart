@@ -6,6 +6,7 @@ import '../models/song.dart';
 import '../services/custom_audio_handler.dart';
 import '../services/storage_service.dart';
 import '../screens/now_playing_screen.dart';
+import '../screens/create_playlist_screen.dart';
 
 class QuickAccessSection extends ConsumerWidget {
   const QuickAccessSection({super.key});
@@ -51,7 +52,11 @@ class QuickAccessSection extends ConsumerWidget {
                 title: 'Create Playlist',
                 subtitle: 'Make your own mix',
                 onTap: () {
-                  _showCreatePlaylistDialog(context, ref);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CreatePlaylistScreen(),
+                    ),
+                  );
                 },
               ),
             ),
@@ -129,81 +134,6 @@ class QuickAccessSection extends ConsumerWidget {
     );
   }
 
-  void _showCreatePlaylistDialog(BuildContext context, WidgetRef ref) {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Create playlist',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                ref.read(playlistsProvider.notifier).createPlaylist(
-                      nameController.text,
-                      description: descriptionController.text.isNotEmpty
-                          ? descriptionController.text
-                          : null,
-                    );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Playlist "${nameController.text}" created'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Create', style: TextStyle(color: Colors.green)),
-          ),
-        ],
-      ),
-    );
-  }
 
 
   void _navigateToRecentlyPlayed(BuildContext context, WidgetRef ref) {

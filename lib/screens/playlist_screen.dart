@@ -8,6 +8,8 @@ import '../models/song.dart';
 import '../services/storage_service.dart';
 import '../services/custom_audio_handler.dart';
 import 'now_playing_screen.dart';
+import 'create_playlist_screen.dart';
+import 'playlist_detail_screen.dart';
 
 class PlaylistScreen extends ConsumerStatefulWidget {
   const PlaylistScreen({super.key});
@@ -161,9 +163,6 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
               case 'play':
                 _playPlaylist(playlist);
                 break;
-              case 'edit':
-                _showEditPlaylistDialog(playlist);
-                break;
               case 'delete':
                 _showDeleteConfirmation(playlist);
                 break;
@@ -177,16 +176,6 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                   Icon(Icons.play_arrow, color: Colors.white),
                   SizedBox(width: 8),
                   Text('Play', style: TextStyle(color: Colors.white)),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Edit', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -208,157 +197,13 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
   }
 
   void _showCreatePlaylistDialog() {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Create playlist',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                ref.read(playlistsProvider.notifier).createPlaylist(
-                      nameController.text,
-                      description: descriptionController.text.isNotEmpty
-                          ? descriptionController.text
-                          : null,
-                    );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Playlist "${nameController.text}" created'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Create', style: TextStyle(color: Colors.green)),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const CreatePlaylistScreen(),
       ),
     );
   }
 
-  void _showEditPlaylistDialog(Playlist playlist) {
-    final nameController = TextEditingController(text: playlist.name);
-    final descriptionController = TextEditingController(text: playlist.description ?? '');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Edit playlist',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                final updatedPlaylist = playlist.copyWith(
-                  name: nameController.text,
-                  description: descriptionController.text.isNotEmpty
-                      ? descriptionController.text
-                      : null,
-                );
-                ref.read(playlistsProvider.notifier).updatePlaylist(updatedPlaylist);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Playlist updated'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Save', style: TextStyle(color: Colors.green)),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showDeleteConfirmation(Playlist playlist) {
     showDialog(
@@ -397,54 +242,9 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
   }
 
   void _showPlaylistSongs(Playlist playlist) {
-    final songs = ref.read(storageServiceProvider).getSongsByIds(playlist.songIds);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: Text(
-          playlist.name,
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: songs.isEmpty
-              ? Center(
-                  child: Text(
-                    'No songs in this playlist',
-                    style: TextStyle(color: Colors.grey[400]),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final song = songs[index];
-                    return ListTile(
-                      leading: const Icon(Icons.music_note, color: Colors.white),
-                      title: Text(
-                        song.title,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        song.artist,
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _playSong(song);
-                      },
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaylistDetailScreen(playlist: playlist),
       ),
     );
   }

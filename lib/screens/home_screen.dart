@@ -58,11 +58,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _scanForMusic,
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
 
@@ -238,21 +233,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           fontSize: 16,
                         ),
                       ),
-          if (!_isSearching) ...[
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-              onPressed: _scanForMusic,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 16,
-                          ),
-                        ),
-                        child: const Text('Scan for Music'),
-                      ),
-          ],
         ],
       ),
     );
@@ -310,58 +290,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
 
-  Future<void> _scanForMusic() async {
-    try {
-      // Show loading indicator
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 16),
-              Text('Scanning for music...'),
-            ],
-          ),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      // Get current songs count before scanning
-      final currentSongsCount = ref.read(songsProvider).length;
-      
-      // Use the provider's scanDeviceForSongs method which handles duplicates properly
-      await ref.read(songsProvider.notifier).scanDeviceForSongs();
-      
-      // Get new songs count after scanning
-      final newSongsCount = ref.read(songsProvider).length;
-      final addedSongs = newSongsCount - currentSongsCount;
-      
-      if (addedSongs > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Found $addedSongs new music files'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No new music files found'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error scanning for music: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 }

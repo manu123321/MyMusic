@@ -8,6 +8,7 @@ import '../models/song.dart';
 import '../services/custom_audio_handler.dart';
 import '../services/storage_service.dart';
 import '../screens/now_playing_screen.dart';
+import '../screens/create_playlist_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -147,7 +148,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               ),
               TextButton(
                 onPressed: () {
-                  _showCreatePlaylistDialog(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CreatePlaylistScreen(),
+                    ),
+                  );
                 },
                 child: const Text(
                   'Create',
@@ -191,7 +196,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () {
-                    _showCreatePlaylistDialog(context);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CreatePlaylistScreen(),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
@@ -402,81 +411,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  void _showCreatePlaylistDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Create playlist',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                ref.read(playlistsProvider.notifier).createPlaylist(
-                      nameController.text,
-                      description: descriptionController.text.isNotEmpty
-                          ? descriptionController.text
-                          : null,
-                    );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Playlist "${nameController.text}" created'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Create', style: TextStyle(color: Colors.green)),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _navigateToPlaylist(BuildContext context, WidgetRef ref, Playlist playlist) {
     final songs = ref.read(storageServiceProvider).getSongsByIds(playlist.songIds);
