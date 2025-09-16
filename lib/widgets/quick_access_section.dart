@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
-import '../models/playlist.dart';
+import '../models/song.dart';
+import '../services/custom_audio_handler.dart';
+import '../services/storage_service.dart';
+import '../screens/now_playing_screen.dart';
 
 class QuickAccessSection extends ConsumerWidget {
   const QuickAccessSection({super.key});
@@ -19,7 +23,7 @@ class QuickAccessSection extends ConsumerWidget {
                 title: 'Liked Songs',
                 subtitle: 'Your favorite songs',
                 onTap: () {
-                  // Navigate to liked songs
+                  _navigateToLikedSongs(context, ref);
                 },
               ),
             ),
@@ -31,7 +35,7 @@ class QuickAccessSection extends ConsumerWidget {
                 title: 'Recently Played',
                 subtitle: 'Your recent activity',
                 onTap: () {
-                  // Navigate to recently played
+                  _navigateToRecentlyPlayed(context, ref);
                 },
               ),
             ),
@@ -47,7 +51,7 @@ class QuickAccessSection extends ConsumerWidget {
                 title: 'Most Played',
                 subtitle: 'Your top tracks',
                 onTap: () {
-                  // Navigate to most played
+                  _navigateToMostPlayed(context, ref);
                 },
               ),
             ),
@@ -211,5 +215,118 @@ class QuickAccessSection extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _navigateToLikedSongs(BuildContext context, WidgetRef ref) {
+    final likedSongs = ref.read(songsProvider.notifier).getLikedSongs();
+    _showSongsDialog(context, ref, 'Liked Songs', likedSongs);
+  }
+
+  void _navigateToRecentlyPlayed(BuildContext context, WidgetRef ref) {
+    final recentlyPlayed = ref.read(songsProvider.notifier).getRecentlyPlayed();
+    _showSongsDialog(context, ref, 'Recently Played', recentlyPlayed);
+  }
+
+  void _navigateToMostPlayed(BuildContext context, WidgetRef ref) {
+    final mostPlayed = ref.read(songsProvider.notifier).getMostPlayed();
+    _showSongsDialog(context, ref, 'Most Played', mostPlayed);
+  }
+
+  void _showSongsDialog(BuildContext context, WidgetRef ref, String title, List<Song> songs) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text(
+          title,
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: songs.isEmpty
+              ? Center(
+                  child: Text(
+                    'No songs found',
+                    style: TextStyle(color: Colors.grey[400]),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: songs.length,
+                  itemBuilder: (context, index) {
+                    final song = songs[index];
+                    return ListTile(
+                      leading: const Icon(Icons.music_note, color: Colors.white),
+                      title: Text(
+                        song.title,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        song.artist,
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _playSong(context, ref, song);
+                      },
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _playSong(BuildContext context, WidgetRef ref, Song song) async {
+    try {
+      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      
+      // Convert song to MediaItem
+      final mediaItem = MediaItem(
+        id: song.filePath,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: Duration(milliseconds: song.duration),
+        artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
+        extras: {
+          'songId': song.id,
+          'trackNumber': song.trackNumber,
+          'year': song.year,
+          'genre': song.genre,
+        },
+      );
+      
+      // Clear current queue and add this song
+      await audioHandler.addQueueItems([mediaItem]);
+      
+      // Start playing
+      await audioHandler.play();
+      
+      // Update recently played
+      await ref.read(storageServiceProvider).addToRecentlyPlayed(song.id);
+      await ref.read(storageServiceProvider).updateSongPlayCount(song.id);
+      
+      // Navigate to now playing screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const NowPlayingScreen(),
+        ),
+      );
+    } catch (e) {
+      print('Error playing song: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error playing song: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

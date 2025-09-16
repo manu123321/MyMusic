@@ -101,7 +101,23 @@ class StorageService {
     // Remove from all playlists
     for (final playlist in _playlistsBox.values) {
       if (playlist.songIds.contains(id)) {
-        playlist.removeSong(id);
+        // Create a new list to avoid modifying the original
+        final updatedSongIds = List<String>.from(playlist.songIds);
+        updatedSongIds.remove(id);
+        
+        // Create a new playlist instance with updated song IDs
+        final updatedPlaylist = Playlist(
+          id: playlist.id,
+          name: playlist.name,
+          description: playlist.description,
+          songIds: updatedSongIds,
+          coverArtPath: playlist.coverArtPath,
+          isSystemPlaylist: playlist.isSystemPlaylist,
+          dateCreated: playlist.dateCreated,
+          dateModified: DateTime.now(),
+        );
+        
+        await savePlaylist(updatedPlaylist);
       }
     }
   }
@@ -124,11 +140,30 @@ class StorageService {
       // Update liked songs playlist
       final likedSongsPlaylist = _playlistsBox.get('liked_songs');
       if (likedSongsPlaylist != null) {
+        // Create a new list to avoid modifying the original
+        final updatedSongIds = List<String>.from(likedSongsPlaylist.songIds);
+        
         if (song.isLiked) {
-          likedSongsPlaylist.addSong(id);
+          if (!updatedSongIds.contains(id)) {
+            updatedSongIds.add(id);
+          }
         } else {
-          likedSongsPlaylist.removeSong(id);
+          updatedSongIds.remove(id);
         }
+        
+        // Create a new playlist instance with updated song IDs
+        final updatedPlaylist = Playlist(
+          id: likedSongsPlaylist.id,
+          name: likedSongsPlaylist.name,
+          description: likedSongsPlaylist.description,
+          songIds: updatedSongIds,
+          coverArtPath: likedSongsPlaylist.coverArtPath,
+          isSystemPlaylist: likedSongsPlaylist.isSystemPlaylist,
+          dateCreated: likedSongsPlaylist.dateCreated,
+          dateModified: DateTime.now(),
+        );
+        
+        await savePlaylist(updatedPlaylist);
       }
     }
   }
@@ -190,15 +225,31 @@ class StorageService {
   Future<void> addToRecentlyPlayed(String songId) async {
     final recentlyPlayed = _playlistsBox.get('recently_played');
     if (recentlyPlayed != null) {
+      // Create a new list to avoid modifying the original
+      final updatedSongIds = List<String>.from(recentlyPlayed.songIds);
+      
       // Remove if already exists
-      recentlyPlayed.songIds.remove(songId);
+      updatedSongIds.remove(songId);
       // Add to beginning
-      recentlyPlayed.songIds.insert(0, songId);
+      updatedSongIds.insert(0, songId);
       // Keep only last 100 songs
-      if (recentlyPlayed.songIds.length > 100) {
-        recentlyPlayed.songIds = recentlyPlayed.songIds.take(100).toList();
+      if (updatedSongIds.length > 100) {
+        updatedSongIds.removeRange(100, updatedSongIds.length);
       }
-      await savePlaylist(recentlyPlayed);
+      
+      // Create a new playlist instance with updated song IDs
+      final updatedPlaylist = Playlist(
+        id: recentlyPlayed.id,
+        name: recentlyPlayed.name,
+        description: recentlyPlayed.description,
+        songIds: updatedSongIds,
+        coverArtPath: recentlyPlayed.coverArtPath,
+        isSystemPlaylist: recentlyPlayed.isSystemPlaylist,
+        dateCreated: recentlyPlayed.dateCreated,
+        dateModified: DateTime.now(),
+      );
+      
+      await savePlaylist(updatedPlaylist);
     }
   }
 
@@ -210,12 +261,22 @@ class StorageService {
       final allSongs = getAllSongs();
       allSongs.sort((a, b) => b.playCount.compareTo(a.playCount));
       
-      // Update most played playlist with top 50 songs
-      mostPlayed.clearSongs();
-      for (final song in allSongs.take(50)) {
-        mostPlayed.addSong(song.id);
-      }
-      await savePlaylist(mostPlayed);
+      // Create new song IDs list
+      final newSongIds = allSongs.take(50).map((song) => song.id).toList();
+      
+      // Create a new playlist instance with updated song IDs
+      final updatedPlaylist = Playlist(
+        id: mostPlayed.id,
+        name: mostPlayed.name,
+        description: mostPlayed.description,
+        songIds: newSongIds,
+        coverArtPath: mostPlayed.coverArtPath,
+        isSystemPlaylist: mostPlayed.isSystemPlaylist,
+        dateCreated: mostPlayed.dateCreated,
+        dateModified: DateTime.now(),
+      );
+      
+      await savePlaylist(updatedPlaylist);
     }
   }
 
