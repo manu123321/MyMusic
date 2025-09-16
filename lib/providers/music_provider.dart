@@ -34,14 +34,28 @@ class SongsNotifier extends StateNotifier<List<Song>> {
 
   Future<void> scanDeviceForSongs() async {
     final metadataService = MetadataService();
-    final newSongs = await metadataService.scanDeviceForAudioFiles();
-    await _storageService.saveSongs(newSongs);
-    state = _storageService.getAllSongs();
+    final scannedSongs = await metadataService.scanDeviceForAudioFiles();
+    
+    // Get existing songs to prevent duplicates
+    final existingSongs = _storageService.getAllSongs();
+    final existingSongIds = existingSongs.map((song) => song.id).toSet();
+    
+    // Filter out songs that already exist
+    final newSongs = scannedSongs.where((song) => !existingSongIds.contains(song.id)).toList();
+    
+    if (newSongs.isNotEmpty) {
+      await _storageService.saveSongs(newSongs);
+      state = _storageService.getAllSongs();
+    }
   }
 
   Future<void> addSong(Song song) async {
-    await _storageService.saveSong(song);
-    state = _storageService.getAllSongs();
+    // Check if song already exists
+    final existingSong = _storageService.getSong(song.id);
+    if (existingSong == null) {
+      await _storageService.saveSong(song);
+      state = _storageService.getAllSongs();
+    }
   }
 
   Future<void> updateSong(Song song) async {

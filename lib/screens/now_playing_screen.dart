@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../services/custom_audio_handler.dart';
-import '../widgets/lyrics_panel.dart';
 import '../widgets/queue_panel.dart';
 import '../widgets/equalizer_panel.dart';
 import '../widgets/sleep_timer_dialog.dart';
@@ -439,11 +438,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     color: Colors.grey[900],
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: _showLyrics
-                      ? const LyricsPanel()
-                      : _showQueue
-                          ? const QueuePanel()
-                          : const EqualizerPanel(),
                 ),
               ),
           ],

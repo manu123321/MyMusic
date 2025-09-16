@@ -145,7 +145,7 @@ class MetadataService {
       }
       
       final song = Song(
-        id: DateTime.now().millisecondsSinceEpoch.toString() + '_${fileName}',
+        id: file.path.hashCode.toString(), // Use file path hash as unique ID
         title: title,
         artist: artist,
         album: album,
@@ -229,7 +229,7 @@ class MetadataService {
             }
             
             final song = Song(
-              id: DateTime.now().millisecondsSinceEpoch.toString() + '_${file.name}',
+              id: file.path!.hashCode.toString(), // Use file path hash as unique ID
               title: _extractTitleFromFileName(file.name),
               artist: 'Unknown Artist',
               album: 'Unknown Album',
