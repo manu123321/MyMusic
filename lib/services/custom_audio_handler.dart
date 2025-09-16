@@ -18,6 +18,8 @@ abstract class CustomAudioHandler {
   Future<void> addQueueItems(List<MediaItem> items);
   Future<void> addQueueItem(MediaItem mediaItem);
   Future<void> removeQueueItem(MediaItem mediaItem);
+  Future<void> clearQueue();
+  Future<void> setQueue(List<MediaItem> items);
   Future<void> customAction(String name, [Map<String, dynamic>? extras]);
   
   // Additional custom methods

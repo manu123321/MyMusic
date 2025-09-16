@@ -68,18 +68,11 @@ class SongsNotifier extends StateNotifier<List<Song>> {
     state = _storageService.getAllSongs();
   }
 
-  Future<void> toggleLike(String songId) async {
-    await _storageService.toggleSongLike(songId);
-    state = _storageService.getAllSongs();
-  }
 
   List<Song> searchSongs(String query) {
     return _storageService.searchSongs(query);
   }
 
-  List<Song> getLikedSongs() {
-    return state.where((song) => song.isLiked).toList();
-  }
 
   List<Song> getRecentlyPlayed() {
     final recentlyPlayedPlaylist = _storageService.getPlaylist('recently_played');

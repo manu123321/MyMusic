@@ -198,6 +198,26 @@ class SimpleAudioHandler implements CustomAudioHandler {
   Future<void> addQueueItem(MediaItem mediaItem) => addQueueItems([mediaItem]);
 
   @override
+  Future<void> clearQueue() async {
+    await _player.stop();
+    await _playlist.clear();
+    await _player.setAudioSource(_playlist);
+    _currentSongs.clear();
+    _currentIndex = 0;
+    _queueSubject.add([]);
+    _currentSongSubject.add(null);
+    await _saveQueue();
+  }
+
+  @override
+  Future<void> setQueue(List<MediaItem> items) async {
+    await clearQueue();
+    if (items.isNotEmpty) {
+      await addQueueItems(items);
+    }
+  }
+
+  @override
   Future<void> removeQueueItem(MediaItem mediaItem) async {
     final idx = queue.value.indexWhere((m) => m.id == mediaItem.id);
     if (idx != -1) {
@@ -224,7 +244,6 @@ class SimpleAudioHandler implements CustomAudioHandler {
       genre: item.extras?['genre'],
       dateAdded: DateTime.now(),
       playCount: 0,
-      isLiked: false,
     );
   }
 

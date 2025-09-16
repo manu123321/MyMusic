@@ -153,7 +153,6 @@ class MetadataService {
         duration: duration,
         dateAdded: DateTime.now(),
         playCount: 0,
-        isLiked: false,
       );
       
       return song;
@@ -237,7 +236,6 @@ class MetadataService {
               duration: duration,
               dateAdded: DateTime.now(),
               playCount: 0,
-              isLiked: false,
             );
             songs.add(song);
           }

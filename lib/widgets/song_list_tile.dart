@@ -6,6 +6,7 @@ import '../models/song.dart';
 import '../providers/music_provider.dart';
 import '../services/metadata_service.dart';
 import '../services/custom_audio_handler.dart';
+import '../services/storage_service.dart';
 import '../screens/now_playing_screen.dart';
 
 class SongListTile extends ConsumerWidget {
@@ -39,6 +40,8 @@ class SongListTile extends ConsumerWidget {
                       width: 56,
                       height: 56,
                       fit: BoxFit.cover,
+                      cacheWidth: 56,
+                      cacheHeight: 56,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           width: 56,
@@ -132,10 +135,11 @@ class SongListTile extends ConsumerWidget {
         },
       );
       
-      // Clear current queue and add this song
-      await audioHandler.addQueueItems([mediaItem]);
+      // Set this song as the only song in the queue
+      await audioHandler.setQueue([mediaItem]);
       
-      // Start playing
+      // Start playing from the beginning
+      await audioHandler.seek(Duration.zero);
       await audioHandler.play();
       
       // Navigate to now playing screen
@@ -241,7 +245,7 @@ class SongListTile extends ConsumerWidget {
               title: 'Play',
               onTap: () {
                 Navigator.pop(context);
-                // Play song
+                _playSong(context, ref);
               },
             ),
             _buildOptionTile(
@@ -251,15 +255,6 @@ class SongListTile extends ConsumerWidget {
               onTap: () {
                 Navigator.pop(context);
                 _showAddToPlaylistDialog(context, ref);
-              },
-            ),
-            _buildOptionTile(
-              context,
-              icon: song.isLiked ? Icons.favorite : Icons.favorite_border,
-              title: song.isLiked ? 'Remove from liked' : 'Add to liked',
-              onTap: () {
-                Navigator.pop(context);
-                ref.read(songsProvider.notifier).toggleLike(song.id);
               },
             ),
             _buildOptionTile(
@@ -458,4 +453,5 @@ class SongListTile extends ConsumerWidget {
       ),
     );
   }
+
 }

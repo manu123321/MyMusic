@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
@@ -96,22 +95,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                     icon: const Icon(Icons.playlist_play, color: Colors.white),
                   ),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.settings, color: Colors.white),
-                  ),
-                ],
-              ),
+                IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.settings, color: Colors.white),
+                ),
+              ],
+            ),
             ],
           ),
-          const SizedBox(height: 16),
-          
+                    const SizedBox(height: 16),
+                    
           // Search bar
           Container(
             decoration: BoxDecoration(
@@ -166,100 +165,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         // Section title
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
               Text(
                 _isSearching ? 'Search Results' : 'All Songs',
                 style: const TextStyle(
-                  color: Colors.white,
+                          color: Colors.white,
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               Text(
                 '${songs.length} songs',
                 style: TextStyle(
                   color: Colors.grey[400],
                   fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 16),
         
         // Songs list
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: songs.length,
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: false,
             itemBuilder: (context, index) {
               final song = songs[index];
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 375),
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: SongListTile(
-                      song: song,
-                      onTap: () => _playSong(song),
-                    ),
-                  ),
+              return SongListTile(
+                              song: song,
+                onTap: () => _playSong(song),
+                      );
+                    },
                 ),
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ],
     );
   }
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.music_note,
-            size: 80,
-            color: Colors.grey[600],
-          ),
-          const SizedBox(height: 16),
-          Text(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                      Icon(
+                        Icons.music_note,
+                        size: 80,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
             _isSearching ? 'No songs found' : 'No music found',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 20,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
             _isSearching 
                 ? 'Try a different search term'
                 : 'Scan your device to find music',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-            ),
-          ),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                      ),
           if (!_isSearching) ...[
-            const SizedBox(height: 24),
-            ElevatedButton(
+                      const SizedBox(height: 24),
+                      ElevatedButton(
               onPressed: _scanForMusic,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
-              ),
-              child: const Text('Scan for Music'),
-            ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
+                          ),
+                        ),
+                        child: const Text('Scan for Music'),
+                      ),
           ],
         ],
       ),
@@ -286,10 +278,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         },
       );
       
-      // Clear current queue and add this song
-      await audioHandler.addQueueItems([mediaItem]);
+      // Set this song as the only song in the queue
+      await audioHandler.setQueue([mediaItem]);
       
-      // Start playing
+      // Start playing from the beginning
+      await audioHandler.seek(Duration.zero);
       await audioHandler.play();
       
       // Update recently played

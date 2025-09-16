@@ -19,18 +19,6 @@ class QuickAccessSection extends ConsumerWidget {
             Expanded(
               child: _buildQuickAccessCard(
                 context,
-                icon: Icons.favorite,
-                title: 'Liked Songs',
-                subtitle: 'Your favorite songs',
-                onTap: () {
-                  _navigateToLikedSongs(context, ref);
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildQuickAccessCard(
-                context,
                 icon: Icons.history,
                 title: 'Recently Played',
                 subtitle: 'Your recent activity',
@@ -217,10 +205,6 @@ class QuickAccessSection extends ConsumerWidget {
     );
   }
 
-  void _navigateToLikedSongs(BuildContext context, WidgetRef ref) {
-    final likedSongs = ref.read(songsProvider.notifier).getLikedSongs();
-    _showSongsDialog(context, ref, 'Liked Songs', likedSongs);
-  }
 
   void _navigateToRecentlyPlayed(BuildContext context, WidgetRef ref) {
     final recentlyPlayed = ref.read(songsProvider.notifier).getRecentlyPlayed();

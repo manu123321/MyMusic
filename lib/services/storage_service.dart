@@ -52,14 +52,6 @@ class StorageService {
       await _playlistsBox.put('recently_played', recentlyPlayed);
     }
 
-    // Liked Songs
-    if (!_playlistsBox.containsKey('liked_songs')) {
-      final likedSongs = Playlist.system(
-        name: 'Liked Songs',
-        description: 'Songs you\'ve liked',
-      );
-      await _playlistsBox.put('liked_songs', likedSongs);
-    }
 
     // Most Played
     if (!_playlistsBox.containsKey('most_played')) {
@@ -131,42 +123,6 @@ class StorageService {
     }
   }
 
-  Future<void> toggleSongLike(String id) async {
-    final song = _songsBox.get(id);
-    if (song != null) {
-      song.isLiked = !song.isLiked;
-      await saveSong(song);
-      
-      // Update liked songs playlist
-      final likedSongsPlaylist = _playlistsBox.get('liked_songs');
-      if (likedSongsPlaylist != null) {
-        // Create a new list to avoid modifying the original
-        final updatedSongIds = List<String>.from(likedSongsPlaylist.songIds);
-        
-        if (song.isLiked) {
-          if (!updatedSongIds.contains(id)) {
-            updatedSongIds.add(id);
-          }
-        } else {
-          updatedSongIds.remove(id);
-        }
-        
-        // Create a new playlist instance with updated song IDs
-        final updatedPlaylist = Playlist(
-          id: likedSongsPlaylist.id,
-          name: likedSongsPlaylist.name,
-          description: likedSongsPlaylist.description,
-          songIds: updatedSongIds,
-          coverArtPath: likedSongsPlaylist.coverArtPath,
-          isSystemPlaylist: likedSongsPlaylist.isSystemPlaylist,
-          dateCreated: likedSongsPlaylist.dateCreated,
-          dateModified: DateTime.now(),
-        );
-        
-        await savePlaylist(updatedPlaylist);
-      }
-    }
-  }
 
   // Playlist operations
   Future<void> savePlaylist(Playlist playlist) async {

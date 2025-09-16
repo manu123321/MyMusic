@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -474,7 +475,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
           'genre': song.genre,
         },
       );
-      
+
       // Clear current queue and add this song
       await audioHandler.addQueueItems([mediaItem]);
       

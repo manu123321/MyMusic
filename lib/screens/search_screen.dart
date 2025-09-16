@@ -123,14 +123,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 },
               ),
               _buildCategoryCard(
-                'Liked Songs',
-                Icons.favorite,
-                Colors.pink,
-                () {
-                  // Navigate to liked songs
-                },
-              ),
-              _buildCategoryCard(
                 'Most Played',
                 Icons.trending_up,
                 Colors.orange,

@@ -44,8 +44,6 @@ class Song extends HiveObject {
   @HiveField(12)
   int playCount;
 
-  @HiveField(13)
-  bool isLiked;
 
   @HiveField(14)
   String? lyricsPath;
@@ -64,7 +62,6 @@ class Song extends HiveObject {
     required this.dateAdded,
     this.lastPlayed,
     this.playCount = 0,
-    this.isLiked = false,
     this.lyricsPath,
   });
 
@@ -83,7 +80,6 @@ class Song extends HiveObject {
       dateAdded: DateTime.tryParse(map['dateAdded'] ?? '') ?? DateTime.now(),
       lastPlayed: map['lastPlayed'] != null ? DateTime.tryParse(map['lastPlayed']) : null,
       playCount: map['playCount'] ?? 0,
-      isLiked: map['isLiked'] ?? false,
       lyricsPath: map['lyricsPath'],
     );
   }
@@ -103,7 +99,6 @@ class Song extends HiveObject {
       'dateAdded': dateAdded.toIso8601String(),
       'lastPlayed': lastPlayed?.toIso8601String(),
       'playCount': playCount,
-      'isLiked': isLiked,
       'lyricsPath': lyricsPath,
     };
   }
@@ -122,7 +117,6 @@ class Song extends HiveObject {
     DateTime? dateAdded,
     DateTime? lastPlayed,
     int? playCount,
-    bool? isLiked,
     String? lyricsPath,
   }) {
     return Song(
@@ -139,7 +133,6 @@ class Song extends HiveObject {
       dateAdded: dateAdded ?? this.dateAdded,
       lastPlayed: lastPlayed ?? this.lastPlayed,
       playCount: playCount ?? this.playCount,
-      isLiked: isLiked ?? this.isLiked,
       lyricsPath: lyricsPath ?? this.lyricsPath,
     );
   }
