@@ -38,22 +38,9 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _isCreating ? null : _createPlaylist,
-            child: Text(
-              'Create',
-              style: TextStyle(
-                color: _isCreating ? Colors.grey : Colors.green,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,47 +81,46 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
                 ),
               ),
               
-              
               const SizedBox(height: 32),
               
-              // Name input field
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.grey[700]!,
-                    width: 1,
-                  ),
+              // Name input field with underline
+              TextField(
+                controller: _nameController,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
                 ),
-                child: TextField(
-                  controller: _nameController,
-                  style: const TextStyle(
-                    color: Colors.white,
+                decoration: InputDecoration(
+                  hintText: 'My playlist #${_getNextPlaylistNumber()}',
+                  hintStyle: TextStyle(
+                    color: Colors.grey[500],
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                   ),
-                  decoration: InputDecoration(
-                    hintText: 'My playlist #${_getNextPlaylistNumber()}',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Colors.grey[600]!,
+                      width: 1,
                     ),
                   ),
-                  onChanged: (value) {
-                    setState(() {}); // Rebuild to update create button state
-                  },
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Colors.green,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 16,
+                  ),
                 ),
+                onChanged: (value) {
+                  setState(() {}); // Rebuild to update create button state
+                },
               ),
-            
               
-              const Spacer(),
+              const SizedBox(height: 40),
               
               // Create button
               SizedBox(
@@ -186,6 +172,8 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
                   ),
                 ),
               ),
+              
+              const SizedBox(height: 20), // Extra space at bottom for scroll
             ],
           ),
         ),

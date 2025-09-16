@@ -38,152 +38,132 @@ class MiniPlayer extends ConsumerWidget {
               ),
             );
           },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                // Album art
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: currentSong.artUri != null
-                      ? Image.file(
-                          File(currentSong.artUri!.toFilePath()),
-                          width: 56,
-                          height: 56,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 56,
-                              height: 56,
-                              color: Colors.grey[800],
-                              child: const Icon(
-                                Icons.music_note,
-                                color: Colors.white,
-                                size: 24,
+          child: Column(
+            children: [
+              // Progress bar at the top
+              StreamBuilder<Duration>(
+                stream: audioHandler.playbackState.map((state) => state.position),
+                builder: (context, snapshot) {
+                  final position = snapshot.data ?? Duration.zero;
+                  final duration = currentSong.duration ?? Duration.zero;
+                  
+                  if (duration.inMilliseconds == 0) {
+                    return Container(
+                      height: 2,
+                      color: Colors.grey[800],
+                    );
+                  }
+                  
+                  final progress = position.inMilliseconds / duration.inMilliseconds;
+                  
+                  return Container(
+                    height: 2,
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0),
+                      backgroundColor: Colors.grey[800],
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+                    ),
+                  );
+                },
+              ),
+              
+              // Main content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      // Album art
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: currentSong.artUri != null
+                            ? Image.file(
+                                File(currentSong.artUri!.toFilePath()),
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: Colors.grey[800],
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                width: 56,
+                                height: 56,
+                                color: Colors.grey[800],
+                                child: const Icon(
+                                  Icons.music_note,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
                               ),
-                            );
-                          },
-                        )
-                      : Container(
-                          width: 56,
-                          height: 56,
-                          color: Colors.grey[800],
-                          child: const Icon(
-                            Icons.music_note,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                
-                // Song info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        currentSong.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        currentSong.artist ?? '',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
+                      const SizedBox(width: 12),
+                      
+                      // Song info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              currentSong.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              currentSong.artist ?? '',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
-                ),
-                
-                // Progress bar
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      StreamBuilder<Duration>(
-                        stream: audioHandler.playbackState.map((state) => state.position),
+                      
+                      // Play/Pause button only
+                      StreamBuilder<bool>(
+                        stream: audioHandler.playbackState.map((state) => state.playing),
                         builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
-                          final duration = currentSong.duration ?? Duration.zero;
-                          
-                          if (duration.inMilliseconds == 0) {
-                            return const SizedBox.shrink();
-                          }
-                          
-                          return SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 2,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                              activeTrackColor: Colors.white,
-                              inactiveTrackColor: Colors.grey[600],
-                              thumbColor: Colors.white,
+                          final isPlaying = snapshot.data ?? false;
+                          return IconButton(
+                            onPressed: () {
+                              if (isPlaying) {
+                                audioHandler.pause();
+                              } else {
+                                audioHandler.play();
+                              }
+                            },
+                            icon: Icon(
+                              isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.white,
                             ),
-                            child: Slider(
-                              value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
-                              max: duration.inMilliseconds.toDouble(),
-                              onChanged: (value) {
-                                audioHandler.seek(Duration(milliseconds: value.toInt()));
-                              },
-                            ),
+                            iconSize: 32,
                           );
                         },
                       ),
                     ],
                   ),
                 ),
-                
-                // Controls
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () => audioHandler.skipToPrevious(),
-                      icon: const Icon(Icons.skip_previous, color: Colors.white),
-                      iconSize: 28,
-                    ),
-                    StreamBuilder<bool>(
-                      stream: audioHandler.playbackState.map((state) => state.playing),
-                      builder: (context, snapshot) {
-                        final isPlaying = snapshot.data ?? false;
-                        return IconButton(
-                          onPressed: () {
-                            if (isPlaying) {
-                              audioHandler.pause();
-                            } else {
-                              audioHandler.play();
-                            }
-                          },
-                          icon: Icon(
-                            isPlaying ? Icons.pause : Icons.play_arrow,
-                            color: Colors.white,
-                          ),
-                          iconSize: 32,
-                        );
-                      },
-                    ),
-                    IconButton(
-                      onPressed: () => audioHandler.skipToNext(),
-                      icon: const Icon(Icons.skip_next, color: Colors.white),
-                      iconSize: 28,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
