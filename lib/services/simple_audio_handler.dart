@@ -143,8 +143,12 @@ class SimpleAudioHandler implements CustomAudioHandler {
     // Handle repeat modes
     switch (_settings.repeatMode) {
       case RepeatMode.none:
-        if (_currentIndex == _currentSongs.length - 1) {
-          pause();
+        if (_currentIndex < _currentSongs.length - 1) {
+          // Play next song
+          skipToNext();
+        } else {
+          // Last song, try to add more songs from library
+          _addMoreSongsToQueue();
         }
         break;
       case RepeatMode.one:
@@ -153,6 +157,39 @@ class SimpleAudioHandler implements CustomAudioHandler {
       case RepeatMode.all:
         // Just audio handles this automatically
         break;
+    }
+  }
+
+  Future<void> _addMoreSongsToQueue() async {
+    try {
+      // Get all songs from storage
+      final allSongs = _storageService.getAllSongs();
+      
+      // If we have more songs available, add them to the queue
+      if (allSongs.length > _currentSongs.length) {
+        // Get songs that are not already in the current queue
+        final currentSongIds = _currentSongs.map((s) => s.id).toSet();
+        final remainingSongs = allSongs.where((s) => !currentSongIds.contains(s.id)).toList();
+        
+        if (remainingSongs.isNotEmpty) {
+          // Add up to 10 more songs to the queue
+          final songsToAdd = remainingSongs.take(10).toList();
+          final mediaItems = songsToAdd.map((song) => _songToMediaItem(song)).toList();
+          await addQueueItems(mediaItems);
+          
+          // Play the next song
+          skipToNext();
+        } else {
+          // No more songs, pause
+          pause();
+        }
+      } else {
+        // No more songs available, pause
+        pause();
+      }
+    } catch (e) {
+      print('Error adding more songs to queue: $e');
+      pause();
     }
   }
 
