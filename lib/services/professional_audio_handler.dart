@@ -211,12 +211,14 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
   void _handleSongCompletion() {
     _loggingService.logInfo('Song completed: ${_currentSong?.title ?? "Unknown"}');
     
-    // Let just_audio handle the advancement automatically
-    // We only intervene if we need to add more songs to the queue
-    if (_currentIndex >= _queue.length - 2) { // Near end of queue
-      _loggingService.logInfo('Near end of queue, adding more songs');
-      _addMoreSongsToQueue();
-    }
+    // CIRCULAR NAVIGATION: Song completion follows same circular logic
+    // just_audio will automatically advance to next index, which is perfect for our circular queue
+    // The circular queue is already built with all songs, so natural progression works
+    
+    final nextIndex = (_currentIndex + 1) % _queue.length;
+    _loggingService.logInfo('CIRCULAR COMPLETION: ${_queue[_currentIndex].title} → ${_queue[nextIndex].title} (automatic)');
+    
+    // No need to add more songs - circular queue contains all songs already
   }
 
   Future<void> _loadSettings() async {
@@ -265,7 +267,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
 
-      _loggingService.logInfo('Setting queue with ${items.length} items');
+      _loggingService.logInfo('Setting queue with ${items.length} items - CIRCULAR NAVIGATION MODE');
       
       // Stop current playback
       await _player.stop();
@@ -274,31 +276,24 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       await _playlist.clear();
       _queue.clear();
       
-      // Convert MediaItems to Songs
-      final songs = items.map(_mediaItemToSong).toList();
-      
-      // CRITICAL: Add selected song first, then additional songs
-      _queue.add(songs.first); // Selected song at index 0
-      
-      // Add more songs for continuous playback (but not if we already have multiple)
-      if (items.length == 1) {
-        final additionalSongs = await _getAdditionalSongs(songs.first);
-        _queue.addAll(additionalSongs);
-      } else {
-        _queue.addAll(songs.skip(1)); // Add remaining selected songs
-      }
+      // CIRCULAR NAVIGATION: Load ALL songs in alphabetical order
+      await _buildCircularQueue(items.first);
       
       // Create audio sources
       final sources = _queue.map((song) => 
           AudioSource.uri(Uri.file(song.filePath))).toList();
       await _playlist.addAll(sources);
       
-      // Set audio source starting from index 0 (selected song)
-      await _player.setAudioSource(_playlist, initialIndex: 0);
+      // Find the index of the selected song in the circular queue
+      final selectedSong = _mediaItemToSong(items.first);
+      final selectedIndex = _queue.indexWhere((s) => s.id == selectedSong.id);
+      
+      // Set audio source starting from selected song index
+      await _player.setAudioSource(_playlist, initialIndex: selectedIndex);
       
       // Update state
-      _currentIndex = 0;
-      _currentSong = _queue.first;
+      _currentIndex = selectedIndex;
+      _currentSong = _queue[selectedIndex];
       
       // Update streams
       final mediaItems = _queue.map(_songToMediaItem).toList();
@@ -311,7 +306,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       // CRITICAL FIX: Start position tracking immediately for first song
       _startPositionTimer();
       
-      _loggingService.logInfo('Queue set successfully. Playing: ${_currentSong!.title}');
+      _loggingService.logInfo('Circular queue built with ${_queue.length} songs. Playing: ${_currentSong!.title} (index: $selectedIndex)');
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error setting queue', e, stackTrace);
@@ -319,52 +314,39 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
     }
   }
 
-  Future<List<Song>> _getAdditionalSongs(Song selectedSong) async {
+  /// Builds a circular queue with ALL songs in alphabetical order
+  Future<void> _buildCircularQueue(MediaItem selectedItem) async {
     try {
+      // Get ALL songs from storage
       final allSongs = _storageService.getAllSongs();
       
-      // Get songs excluding the selected one
-      final otherSongs = allSongs.where((s) => s.id != selectedSong.id).toList();
+      if (allSongs.isEmpty) {
+        _loggingService.logWarning('No songs available for circular queue');
+        return;
+      }
       
-      if (otherSongs.isEmpty) return [];
+      // Sort ALL songs alphabetically by title (a→b→c→...→z)
+      final sortedSongs = List<Song>.from(allSongs);
+      sortedSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       
-      // PROFESSIONAL APPROACH: Predictable order for better UX
-      // Sort by artist, then album, then track number for logical progression
-      otherSongs.sort((a, b) {
-        // First, try to group by same artist as selected song
-        if (a.artist == selectedSong.artist && b.artist != selectedSong.artist) return -1;
-        if (b.artist == selectedSong.artist && a.artist != selectedSong.artist) return 1;
-        
-        // Then by artist name
-        final artistCompare = a.artist.compareTo(b.artist);
-        if (artistCompare != 0) return artistCompare;
-        
-        // Then by album
-        final albumCompare = a.album.compareTo(b.album);
-        if (albumCompare != 0) return albumCompare;
-        
-        // Finally by track number
-        return (a.trackNumber ?? 0).compareTo(b.trackNumber ?? 0);
-      });
-      
-      final additionalSongs = otherSongs.take(20).toList();
-      
-      // Validate songs
+      // Validate and add all songs
       final validSongs = <Song>[];
-      for (final song in additionalSongs) {
+      for (final song in sortedSongs) {
         if (await _validateSongFile(song)) {
           validSongs.add(song);
         }
       }
       
-      _loggingService.logInfo('Added ${validSongs.length} additional songs for continuous playback');
-      return validSongs;
+      _queue.addAll(validSongs);
+      
+      _loggingService.logInfo('Built circular queue with ${_queue.length} songs in alphabetical order');
       
     } catch (e, stackTrace) {
-      _loggingService.logError('Error getting additional songs', e, stackTrace);
-      return [];
+      _loggingService.logError('Error building circular queue', e, stackTrace);
+      rethrow;
     }
   }
+
 
   Future<bool> _validateSongFile(Song song) async {
     try {
@@ -487,19 +469,12 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
       
-      final nextIndex = _currentIndex + 1;
+      // CIRCULAR NAVIGATION: Forward (a→b→c→...→z→a→b→...)
+      final nextIndex = (_currentIndex + 1) % _queue.length; // Circular wrap-around
       
-      if (nextIndex < _queue.length) {
-        _loggingService.logInfo('Skipping to next: ${_queue[nextIndex].title}');
-        await _player.seek(Duration.zero, index: nextIndex);
-      } else {
-        _loggingService.logInfo('At end of queue, adding more songs');
-        await _addMoreSongsToQueue();
-        
-        if (_currentIndex + 1 < _queue.length) {
-          await _player.seek(Duration.zero, index: _currentIndex + 1);
-        }
-      }
+      _loggingService.logInfo('CIRCULAR FORWARD: ${_queue[_currentIndex].title} → ${_queue[nextIndex].title} ($_currentIndex → $nextIndex)');
+      
+      await _player.seek(Duration.zero, index: nextIndex);
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error skipping to next', e, stackTrace);
@@ -515,14 +490,12 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
       
-      if (_currentIndex > 0) {
-        final prevIndex = _currentIndex - 1;
-        _loggingService.logInfo('Skipping to previous: ${_queue[prevIndex].title}');
-        await _player.seek(Duration.zero, index: prevIndex);
-      } else {
-        _loggingService.logInfo('At beginning, restarting current song');
-        await _player.seek(Duration.zero);
-      }
+      // CIRCULAR NAVIGATION: Backward (z→y→x→...→b→a→z→y→...)
+      final prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length; // Circular wrap-around
+      
+      _loggingService.logInfo('CIRCULAR BACKWARD: ${_queue[_currentIndex].title} → ${_queue[prevIndex].title} ($_currentIndex → $prevIndex)');
+      
+      await _player.seek(Duration.zero, index: prevIndex);
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error skipping to previous', e, stackTrace);
@@ -659,59 +632,6 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
     );
   }
 
-  Future<void> _addMoreSongsToQueue() async {
-    try {
-      final allSongs = _storageService.getAllSongs();
-      final currentSongIds = _queue.map((s) => s.id).toSet();
-      final remainingSongs = allSongs.where((s) => !currentSongIds.contains(s.id)).toList();
-      
-      if (remainingSongs.isEmpty) {
-        _loggingService.logInfo('No more songs to add to queue');
-        return;
-      }
-      
-      // PROFESSIONAL APPROACH: Predictable continuation
-      // Sort remaining songs in the same logical order as _getAdditionalSongs
-      remainingSongs.sort((a, b) {
-        final artistCompare = a.artist.compareTo(b.artist);
-        if (artistCompare != 0) return artistCompare;
-        
-        final albumCompare = a.album.compareTo(b.album);
-        if (albumCompare != 0) return albumCompare;
-        
-        return (a.trackNumber ?? 0).compareTo(b.trackNumber ?? 0);
-      });
-      
-      final songsToAdd = remainingSongs.take(10).toList();
-      
-      // Validate and add songs
-      final validSongs = <Song>[];
-      for (final song in songsToAdd) {
-        if (await _validateSongFile(song)) {
-          validSongs.add(song);
-        }
-      }
-      
-      if (validSongs.isNotEmpty) {
-        _queue.addAll(validSongs);
-        
-        final additionalSources = validSongs.map((song) => 
-            AudioSource.uri(Uri.file(song.filePath))).toList();
-        await _playlist.addAll(additionalSources);
-        
-        // Update queue stream
-        final mediaItems = _queue.map(_songToMediaItem).toList();
-        _queueSubject.add(mediaItems);
-        
-        await _saveQueue();
-        
-        _loggingService.logInfo('Added ${validSongs.length} more songs to queue');
-      }
-      
-    } catch (e, stackTrace) {
-      _loggingService.logError('Error adding more songs to queue', e, stackTrace);
-    }
-  }
 
   Future<void> _saveQueue() async {
     try {
