@@ -19,6 +19,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   late final StreamSubscription<PlaybackEvent> _playbackEventSub;
   late final StreamSubscription<Duration> _positionSub;
   late final StreamSubscription<Duration?> _durationSub;
+  late final StreamSubscription<int?> _currentIndexSub;
 
   final StorageService _storageService = StorageService();
   final LoggingService _loggingService = LoggingService();
@@ -32,10 +33,14 @@ class SimpleAudioHandler implements CustomAudioHandler {
   static const int _maxConsecutiveErrors = 5;
 
   // BehaviorSubjects for UI compatibility
-  final _currentSongSubject = BehaviorSubject<MediaItem?>();
+  final _currentSongSubject = BehaviorSubject<MediaItem?>.seeded(null);
   final _playbackStateSubject = BehaviorSubject<PlaybackState>();
-  final _queueSubject = BehaviorSubject<List<MediaItem>>();
+  final _queueSubject = BehaviorSubject<List<MediaItem>>.seeded([]);
   final _errorSubject = BehaviorSubject<String>();
+  
+  // Dedicated position stream for real-time progress updates
+  final _positionSubject = BehaviorSubject<Duration>.seeded(Duration.zero);
+  Timer? _positionTimer;
 
   final List<Song> _currentSongs = [];
   int _currentIndex = 0;
@@ -44,11 +49,18 @@ class SimpleAudioHandler implements CustomAudioHandler {
     _loggingService.logInfo('Initializing SimpleAudioHandler');
     
     // Initialize with default values
-    _currentSongSubject.add(null);
     _playbackStateSubject.add(PlaybackState(
-      controls: [],
-      systemActions: const {},
-      androidCompactActionIndices: [],
+      controls: [
+        MediaControl.skipToPrevious,
+        MediaControl.play,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+      },
+      androidCompactActionIndices: const [0, 1, 2],
       processingState: AudioProcessingState.idle,
       playing: false,
       updatePosition: Duration.zero,
@@ -56,7 +68,6 @@ class SimpleAudioHandler implements CustomAudioHandler {
       speed: 1.0,
       queueIndex: null,
     ));
-    _queueSubject.add([]);
     
     // Don't auto-initialize in constructor
     // Let main.dart call initialize() explicitly
@@ -64,13 +75,22 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
   // Expose streams for UI compatibility
   @override
-  ValueStream<MediaItem?> get mediaItem => _currentSongSubject.stream;
+  ValueStream<MediaItem?> get mediaItem => _currentSongSubject.shareValueSeeded(null);
 
   @override
-  ValueStream<PlaybackState> get playbackState => _playbackStateSubject.stream;
+  ValueStream<PlaybackState> get playbackState => _playbackStateSubject.shareValueSeeded(
+    PlaybackState(
+      controls: [MediaControl.play],
+      processingState: AudioProcessingState.idle,
+      playing: false,
+      updatePosition: Duration.zero,
+      bufferedPosition: Duration.zero,
+      speed: 1.0,
+    ),
+  );
 
   @override
-  ValueStream<List<MediaItem>> get queue => _queueSubject.stream;
+  ValueStream<List<MediaItem>> get queue => _queueSubject.shareValueSeeded([]);
   
   @override
   Stream<String> get errorStream => _errorSubject.stream;
@@ -153,9 +173,13 @@ class SimpleAudioHandler implements CustomAudioHandler {
         },
       );
 
+      // CRITICAL FIX: Position stream with higher frequency updates
       _positionSub = _player.positionStream.listen(
         (position) {
           try {
+            // Update dedicated position subject for smooth progress
+            _positionSubject.add(position);
+            // Update position immediately for smooth progress bar
             _broadcastState();
           } catch (e, stackTrace) {
             _handleStreamError('position', e, stackTrace);
@@ -165,6 +189,9 @@ class SimpleAudioHandler implements CustomAudioHandler {
           _handleStreamError('position stream', e, stackTrace);
         },
       );
+      
+      // Start high-frequency position timer for ultra-smooth progress
+      _startPositionTimer();
 
       _durationSub = _player.durationStream.listen(
         (duration) {
@@ -179,17 +206,34 @@ class SimpleAudioHandler implements CustomAudioHandler {
         },
       );
 
-      // When currentIndex changes, update current song
-      _player.currentIndexStream.listen(
+      // CRITICAL FIX: When currentIndex changes, update current song
+      _currentIndexSub = _player.currentIndexStream.listen(
         (index) {
           try {
+            _loggingService.logDebug('Current index changed to: $index');
+            
             if (index != null && index < _currentSongs.length) {
               _currentIndex = index;
               final song = _currentSongs[index];
-              _currentSongSubject.add(_songToMediaItem(song));
+              final mediaItem = _songToMediaItem(song);
+              
+              _loggingService.logInfo('Now playing: ${song.title} (index: $index)');
+              
+              // Update current song
+              _currentSongSubject.add(mediaItem);
+              
+              // Update queue to reflect current position
+              final queueItems = _currentSongs.map((s) => _songToMediaItem(s)).toList();
+              _queueSubject.add(queueItems);
+              
+              // Broadcast updated state
+              _broadcastState();
 
               // Update play count and recently played asynchronously
               _updateSongStatistics(song.id);
+            } else if (index == null) {
+              _currentSongSubject.add(null);
+              _broadcastState();
             }
           } catch (e, stackTrace) {
             _handleStreamError('current index', e, stackTrace);
@@ -438,8 +482,22 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
   @override
   Future<void> setQueue(List<MediaItem> items) async {
-    await clearQueue();
-    if (items.isNotEmpty) {
+    try {
+      _loggingService.logInfo('Setting queue with ${items.length} items');
+      
+      // Clear current state
+      await _player.stop();
+      await _playlist.clear();
+      _currentSongs.clear();
+      _currentIndex = 0;
+      
+      if (items.isEmpty) {
+        _currentSongSubject.add(null);
+        _queueSubject.add([]);
+        _broadcastState();
+        return;
+      }
+
       // Convert MediaItems to Songs and add to internal list
       final songs = items.map((item) => _mediaItemToSong(item)).toList();
       _currentSongs.addAll(songs);
@@ -449,22 +507,33 @@ class SimpleAudioHandler implements CustomAudioHandler {
         await _addMoreSongsToQueueForSingleSong();
       }
       
-      // Update queue subject with current songs
+      // Create audio sources for all songs in the queue
+      final sources = _currentSongs.map((song) => 
+          AudioSource.uri(Uri.file(song.filePath))).toList();
+      await _playlist.addAll(sources);
+      
+      // Set the audio source and start from index 0
+      await _player.setAudioSource(_playlist, initialIndex: 0);
+      
+      // Update queue and current song
       final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
       _queueSubject.add(currentMediaItems);
       
-      // Create audio sources for all songs in the queue
-      final sources = _currentSongs.map((song) => AudioSource.uri(Uri.parse(song.filePath))).toList();
-      await _playlist.addAll(sources);
+      if (_currentSongs.isNotEmpty) {
+        final firstSong = _currentSongs.first;
+        _currentSongSubject.add(_songToMediaItem(firstSong));
+        _loggingService.logInfo('Queue set, first song: ${firstSong.title}');
+      }
       
-      // Always start from index 0 since we want to play the first song in the queue
-      await _player.setAudioSource(_playlist, initialIndex: 0);
-      
-      // Set the first song as current - let the player's currentIndexStream handle this
-      _currentSongSubject.add(_songToMediaItem(_currentSongs.first));
+      // Broadcast initial state
+      _broadcastState();
       
       // Save queue to storage
       await _saveQueue();
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting queue', e, stackTrace);
+      rethrow;
     }
   }
 
@@ -510,42 +579,201 @@ class SimpleAudioHandler implements CustomAudioHandler {
   }
 
   @override
-  Future<void> play() async => _player.play();
-
-  @override
-  Future<void> pause() async => _player.pause();
-
-  @override
-  Future<void> stop() async {
-    await _player.stop();
-    _currentSongSubject.add(null);
+  Future<void> play() async {
+    try {
+      _loggingService.logInfo('Play command received');
+      
+      // Force immediate state update before actual play
+      _playbackStateSubject.add(
+        _playbackStateSubject.value.copyWith(
+          playing: true,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.pause,
+            MediaControl.skipToNext,
+          ],
+        ),
+      );
+      
+      await _player.play();
+      
+      // Start position timer for smooth progress
+      _startPositionTimer();
+      
+      // Broadcast state again after play
+      _broadcastState();
+      
+      _loggingService.logInfo('Play command completed');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during play', e, stackTrace);
+      
+      // Revert state on error
+      _playbackStateSubject.add(
+        _playbackStateSubject.value.copyWith(
+          playing: false,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+        ),
+      );
+      
+      rethrow;
+    }
   }
 
   @override
-  Future<void> seek(Duration position) async => _player.seek(position);
+  Future<void> pause() async {
+    try {
+      _loggingService.logInfo('Pause command received');
+      
+      // Force immediate state update before actual pause
+      _playbackStateSubject.add(
+        _playbackStateSubject.value.copyWith(
+          playing: false,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+        ),
+      );
+      
+      await _player.pause();
+      
+      // Stop position timer when paused
+      _stopPositionTimer();
+      
+      // Broadcast state again after pause
+      _broadcastState();
+      
+      _loggingService.logInfo('Pause command completed');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during pause', e, stackTrace);
+      
+      // Revert state on error
+      _playbackStateSubject.add(
+        _playbackStateSubject.value.copyWith(
+          playing: true,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.pause,
+            MediaControl.skipToNext,
+          ],
+        ),
+      );
+      
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> stop() async {
+    try {
+      _loggingService.logInfo('Stop command received');
+      await _player.stop();
+      
+      // Stop position timer
+      _stopPositionTimer();
+      
+      _currentSongSubject.add(null);
+      _positionSubject.add(Duration.zero);
+      _broadcastState();
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during stop', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    try {
+      _loggingService.logDebug('Seek to position: ${position.inSeconds}s');
+      await _player.seek(position);
+      _broadcastState();
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during seek', e, stackTrace);
+      rethrow;
+    }
+  }
 
   @override
   Future<void> skipToNext() async {
-    // Check if we have more songs in the queue
-    if (_currentIndex < _currentSongs.length - 1) {
-      final nextIndex = _currentIndex + 1;
-      await _player.seek(Duration.zero, index: nextIndex);
-    } else {
-      // Try to add more songs to the queue
-      await _addMoreSongsToQueue();
+    try {
+      _loggingService.logInfo('Skip to next command received');
+      
+      if (_currentSongs.isEmpty) {
+        _loggingService.logWarning('No songs in queue for skip next');
+        return;
+      }
+      
+      // Check if we have more songs in the queue
       if (_currentIndex < _currentSongs.length - 1) {
         final nextIndex = _currentIndex + 1;
+        _loggingService.logInfo('Skipping to next song at index: $nextIndex');
         await _player.seek(Duration.zero, index: nextIndex);
+        _currentIndex = nextIndex;
+        
+        // Update current song immediately
+        final nextSong = _currentSongs[nextIndex];
+        _currentSongSubject.add(_songToMediaItem(nextSong));
+        _broadcastState();
+        
+        _loggingService.logInfo('Now playing: ${nextSong.title}');
+      } else {
+        _loggingService.logInfo('Reached end of queue, trying to add more songs');
+        await _addMoreSongsToQueue();
+        
+        // Try again if we now have more songs
+        if (_currentIndex < _currentSongs.length - 1) {
+          final nextIndex = _currentIndex + 1;
+          await _player.seek(Duration.zero, index: nextIndex);
+          _currentIndex = nextIndex;
+          
+          final nextSong = _currentSongs[nextIndex];
+          _currentSongSubject.add(_songToMediaItem(nextSong));
+          _broadcastState();
+        } else {
+          _loggingService.logInfo('No more songs available');
+        }
       }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during skip to next', e, stackTrace);
+      rethrow;
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    // Check if we can go to previous song
-    if (_currentIndex > 0) {
-      final prevIndex = _currentIndex - 1;
-      await _player.seek(Duration.zero, index: prevIndex);
+    try {
+      _loggingService.logInfo('Skip to previous command received');
+      
+      if (_currentSongs.isEmpty) {
+        _loggingService.logWarning('No songs in queue for skip previous');
+        return;
+      }
+      
+      // Check if we can go to previous song
+      if (_currentIndex > 0) {
+        final prevIndex = _currentIndex - 1;
+        _loggingService.logInfo('Skipping to previous song at index: $prevIndex');
+        await _player.seek(Duration.zero, index: prevIndex);
+        _currentIndex = prevIndex;
+        
+        // Update current song immediately
+        final prevSong = _currentSongs[prevIndex];
+        _currentSongSubject.add(_songToMediaItem(prevSong));
+        _broadcastState();
+        
+        _loggingService.logInfo('Now playing: ${prevSong.title}');
+      } else {
+        _loggingService.logInfo('Already at first song, restarting current song');
+        await _player.seek(Duration.zero);
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during skip to previous', e, stackTrace);
+      rethrow;
     }
   }
 
@@ -739,35 +967,68 @@ class SimpleAudioHandler implements CustomAudioHandler {
     _loggingService.logDebug('Custom action: $name with extras: $extras');
   }
 
+  // High-frequency position timer for ultra-smooth progress bars
+  void _startPositionTimer() {
+    _stopPositionTimer(); // Stop any existing timer
+    
+    _positionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (_player.playing && !_isDisposed) {
+        final position = _player.position;
+        _positionSubject.add(position);
+        
+        // Also update the playback state for complete synchronization
+        _broadcastState();
+      }
+    });
+    
+    _loggingService.logDebug('Started high-frequency position timer');
+  }
+  
+  void _stopPositionTimer() {
+    _positionTimer?.cancel();
+    _positionTimer = null;
+    _loggingService.logDebug('Stopped position timer');
+  }
+  
+  // Expose dedicated position stream for progress bars
+  @override
+  ValueStream<Duration> get positionStream => _positionSubject.shareValueSeeded(Duration.zero);
+
   void _broadcastState() {
-    final playing = _player.playing;
+    try {
+      final playing = _player.playing;
+      final processingState = _player.processingState;
+      final position = _player.position;
+      final bufferedPosition = _player.bufferedPosition;
+      final speed = _player.speed;
+      final currentIndex = _player.currentIndex;
 
-    final controls = <MediaControl>[
-      MediaControl.skipToPrevious,
-      if (playing) MediaControl.pause else MediaControl.play,
-      MediaControl.stop,
-      MediaControl.skipToNext,
-    ];
+      final controls = <MediaControl>[
+        MediaControl.skipToPrevious,
+        if (playing) MediaControl.pause else MediaControl.play,
+        MediaControl.skipToNext,
+      ];
 
-    final androidCompact = [0, 1, 3];
-
-    _playbackStateSubject.add(
-      PlaybackState(
+      final newState = PlaybackState(
         controls: controls,
-        systemActions: const {},
-        androidCompactActionIndices: androidCompact,
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        androidCompactActionIndices: const [0, 1, 2],
         processingState: {
           ProcessingState.idle: AudioProcessingState.idle,
           ProcessingState.loading: AudioProcessingState.loading,
           ProcessingState.buffering: AudioProcessingState.buffering,
           ProcessingState.ready: AudioProcessingState.ready,
           ProcessingState.completed: AudioProcessingState.completed,
-        }[_player.processingState]!,
+        }[processingState] ?? AudioProcessingState.idle,
         playing: playing,
-        updatePosition: _player.position,
-        bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
-        queueIndex: _player.currentIndex,
+        updatePosition: position,
+        bufferedPosition: bufferedPosition,
+        speed: speed,
+        queueIndex: currentIndex,
         repeatMode: _settings.repeatMode == RepeatMode.one
             ? AudioServiceRepeatMode.one
             : _settings.repeatMode == RepeatMode.all
@@ -776,8 +1037,15 @@ class SimpleAudioHandler implements CustomAudioHandler {
         shuffleMode: _settings.shuffleEnabled
             ? AudioServiceShuffleMode.all
             : AudioServiceShuffleMode.none,
-      ),
-    );
+      );
+
+      _playbackStateSubject.add(newState);
+      
+      _loggingService.logDebug('State broadcast: playing=$playing, position=${position.inSeconds}s, index=$currentIndex');
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error broadcasting state', e, stackTrace);
+    }
   }
 
   /// Error handling methods
@@ -810,6 +1078,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
       await _playerStateSub.cancel();
       await _positionSub.cancel();
       await _durationSub.cancel();
+      await _currentIndexSub.cancel();
       
       // Reset state
       _isInitialized = false;
@@ -862,14 +1131,16 @@ class SimpleAudioHandler implements CustomAudioHandler {
       _loggingService.logInfo('Disposing audio handler');
       _isDisposed = true;
       
-      // Cancel sleep timer
+      // Cancel sleep timer and position timer
       _sleepTimer?.cancel();
+      _stopPositionTimer();
       
       // Cancel stream subscriptions
       await _playbackEventSub.cancel();
       await _playerStateSub.cancel();
       await _positionSub.cancel();
       await _durationSub.cancel();
+      await _currentIndexSub.cancel();
       
       // Save current queue
       await _saveQueue();
@@ -881,6 +1152,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
       await _currentSongSubject.close();
       await _playbackStateSubject.close();
       await _queueSubject.close();
+      await _positionSubject.close();
       
       _loggingService.logInfo('Audio handler disposed successfully');
     } catch (e, stackTrace) {

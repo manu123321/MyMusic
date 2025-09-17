@@ -42,7 +42,8 @@ class MiniPlayer extends ConsumerWidget {
             children: [
               // Progress bar at the top
               StreamBuilder<Duration>(
-                stream: audioHandler.playbackState.map((state) => state.position),
+                stream: audioHandler.positionStream ?? 
+                       audioHandler.playbackState.map((state) => state.updatePosition),
                 builder: (context, snapshot) {
                   final position = snapshot.data ?? Duration.zero;
                   final duration = currentSong.duration ?? Duration.zero;

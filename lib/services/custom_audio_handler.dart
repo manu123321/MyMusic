@@ -54,6 +54,9 @@ abstract class CustomAudioHandler {
   Duration? get currentPosition;
   Duration? get currentDuration;
   
+  // Dedicated position stream for smooth progress bars
+  ValueStream<Duration>? get positionStream;
+  
   // Error handling
   Stream<String> get errorStream;
   Future<void> recover();

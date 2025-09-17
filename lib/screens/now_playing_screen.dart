@@ -58,8 +58,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       curve: Curves.easeOutCubic,
     ));
     
-    // Start entrance animation
-    _slideController.forward();
+    // Start entrance animation with delay to prevent glitches
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted) {
+        _slideController.forward();
+      }
+    });
     
     _loggingService.logInfo('Now playing screen opened');
   }
@@ -79,10 +83,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     if (state == AppLifecycleState.paused) {
       _albumArtController.stop();
     } else if (state == AppLifecycleState.resumed) {
-      final playbackState = ref.read(playbackStateProvider).value;
-      if (playbackState?.playing == true) {
-        _albumArtController.repeat();
-      }
+      // Add small delay to prevent glitches during resume
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          final playbackState = ref.read(playbackStateProvider).value;
+          if (playbackState?.playing == true) {
+            _albumArtController.repeat();
+          }
+        }
+      });
     }
   }
 
@@ -307,7 +316,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     StreamBuilder<Duration>(
-                      stream: audioHandler.playbackState.map((state) => state.position),
+                      stream: audioHandler.positionStream ?? 
+                             audioHandler.playbackState.map((state) => state.updatePosition),
                       builder: (context, snapshot) {
                         final position = snapshot.data ?? Duration.zero;
                         final duration = currentSong.duration ?? Duration.zero;

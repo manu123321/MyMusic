@@ -311,9 +311,15 @@ class _SongListTileState extends ConsumerState<SongListTile>
       // Set this song as the only song in the queue
       await audioHandler.setQueue([mediaItem]);
 
+      // Small delay to ensure queue is properly set
+      await Future.delayed(const Duration(milliseconds: 200));
+      
       // Start playing from the beginning
       await audioHandler.seek(Duration.zero);
       await audioHandler.play();
+      
+      // Small delay to ensure playback starts and state is updated
+      await Future.delayed(const Duration(milliseconds: 200));
 
       // Update song statistics
       await Future.wait([
@@ -321,13 +327,18 @@ class _SongListTileState extends ConsumerState<SongListTile>
         ref.read(storageServiceProvider).addToRecentlyPlayed(widget.song.id),
       ]);
 
-      // Navigate to now playing screen
+      // Navigate to now playing screen with delay to prevent glitches
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const NowPlayingScreen(),
-          ),
-        );
+        // Small delay to ensure playback is fully started
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const NowPlayingScreen(),
+            ),
+          );
+        }
       }
     } catch (e, stackTrace) {
       _loggingService.logError('Error playing song: ${widget.song.title}', e, stackTrace);

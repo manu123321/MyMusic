@@ -52,15 +52,20 @@ class SongsNotifier extends StateNotifier<List<Song>> {
     this._loggingService,
     this._ref,
   ) : super([]) {
-    _initializeSongs();
+    // Don't call _initializeSongs() in constructor - this violates Riverpod rules
+    // Initialize asynchronously after construction
+    Future.microtask(() => _initializeSongs());
   }
 
   Future<void> _initializeSongs() async {
     if (_isInitialized) return;
     
     try {
-      _ref.read(songsLoadingProvider.notifier).state = true;
-      _ref.read(lastErrorProvider.notifier).state = null;
+      // Use Future.microtask to avoid modifying providers during initialization
+      Future.microtask(() {
+        _ref.read(songsLoadingProvider.notifier).state = true;
+        _ref.read(lastErrorProvider.notifier).state = null;
+      });
       
       await loadSongs();
       _isInitialized = true;
@@ -68,16 +73,18 @@ class SongsNotifier extends StateNotifier<List<Song>> {
       _loggingService.logInfo('Songs provider initialized successfully');
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to initialize songs provider', e, stackTrace);
-      _ref.read(lastErrorProvider.notifier).state = 'Failed to load songs: ${e.toString()}';
+      Future.microtask(() {
+        _ref.read(lastErrorProvider.notifier).state = 'Failed to load songs: ${e.toString()}';
+      });
     } finally {
-      _ref.read(songsLoadingProvider.notifier).state = false;
+      Future.microtask(() {
+        _ref.read(songsLoadingProvider.notifier).state = false;
+      });
     }
   }
 
   Future<void> loadSongs() async {
     try {
-      _ref.read(songsLoadingProvider.notifier).state = true;
-      
       final songs = _storageService.getAllSongs();
       
       // Update cache
@@ -91,10 +98,7 @@ class SongsNotifier extends StateNotifier<List<Song>> {
       
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to load songs', e, stackTrace);
-      _ref.read(lastErrorProvider.notifier).state = 'Failed to load songs';
       rethrow;
-    } finally {
-      _ref.read(songsLoadingProvider.notifier).state = false;
     }
   }
 
@@ -362,15 +366,18 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
     this._loggingService,
     this._ref,
   ) : super([]) {
-    _initializePlaylists();
+    // Don't call _initializePlaylists() in constructor - this violates Riverpod rules
+    Future.microtask(() => _initializePlaylists());
   }
 
   Future<void> _initializePlaylists() async {
     if (_isInitialized) return;
     
     try {
-      _ref.read(playlistsLoadingProvider.notifier).state = true;
-      _ref.read(lastErrorProvider.notifier).state = null;
+      Future.microtask(() {
+        _ref.read(playlistsLoadingProvider.notifier).state = true;
+        _ref.read(lastErrorProvider.notifier).state = null;
+      });
       
       await loadPlaylists();
       _isInitialized = true;
@@ -378,16 +385,18 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
       _loggingService.logInfo('Playlists provider initialized successfully');
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to initialize playlists provider', e, stackTrace);
-      _ref.read(lastErrorProvider.notifier).state = 'Failed to load playlists: ${e.toString()}';
+      Future.microtask(() {
+        _ref.read(lastErrorProvider.notifier).state = 'Failed to load playlists: ${e.toString()}';
+      });
     } finally {
-      _ref.read(playlistsLoadingProvider.notifier).state = false;
+      Future.microtask(() {
+        _ref.read(playlistsLoadingProvider.notifier).state = false;
+      });
     }
   }
 
   Future<void> loadPlaylists() async {
     try {
-      _ref.read(playlistsLoadingProvider.notifier).state = true;
-      
       final playlists = _storageService.getAllPlaylists();
       
       // Update cache
@@ -401,10 +410,7 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
       
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to load playlists', e, stackTrace);
-      _ref.read(lastErrorProvider.notifier).state = 'Failed to load playlists';
       rethrow;
-    } finally {
-      _ref.read(playlistsLoadingProvider.notifier).state = false;
     }
   }
 
@@ -660,7 +666,8 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
     this._loggingService,
     this._ref,
   ) : super(PlaybackSettings()) {
-    _initializeSettings();
+    // Don't call _initializeSettings() in constructor - this violates Riverpod rules
+    Future.microtask(() => _initializeSettings());
   }
 
   Future<void> _initializeSettings() async {
@@ -673,7 +680,9 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
       _loggingService.logInfo('Playback settings provider initialized successfully');
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to initialize playback settings provider', e, stackTrace);
-      _ref.read(lastErrorProvider.notifier).state = 'Failed to load settings: ${e.toString()}';
+      Future.microtask(() {
+        _ref.read(lastErrorProvider.notifier).state = 'Failed to load settings: ${e.toString()}';
+      });
     }
   }
 
