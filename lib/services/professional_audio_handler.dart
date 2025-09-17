@@ -10,10 +10,10 @@ import '../models/queue_item.dart';
 import 'storage_service.dart';
 import 'custom_audio_handler.dart';
 import 'logging_service.dart';
-import 'media_session_manager.dart';
 
 /// Professional audio handler with reliable song selection and playback
-class ProfessionalAudioHandler implements CustomAudioHandler {
+class ProfessionalAudioHandler extends BaseAudioHandler 
+    with QueueHandler, SeekHandler implements CustomAudioHandler {
   // Core audio components
   final _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
@@ -21,7 +21,6 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
   // Services
   final StorageService _storageService = StorageService();
   final LoggingService _loggingService = LoggingService();
-  final MediaSessionManager _mediaSessionManager = MediaSessionManager();
   
   // State management
   PlaybackSettings _settings = PlaybackSettings();
@@ -74,15 +73,15 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
     ));
   }
 
-  // Stream getters
+  // Stream getters - Override BaseAudioHandler properties
   @override
-  ValueStream<MediaItem?> get mediaItem => _mediaItemSubject.shareValueSeeded(null);
+  BehaviorSubject<MediaItem?> get mediaItem => _mediaItemSubject;
 
   @override
-  ValueStream<PlaybackState> get playbackState => _playbackStateSubject.shareValue();
+  BehaviorSubject<PlaybackState> get playbackState => _playbackStateSubject;
 
   @override
-  ValueStream<List<MediaItem>> get queue => _queueSubject.shareValueSeeded([]);
+  BehaviorSubject<List<MediaItem>> get queue => _queueSubject;
   
   @override
   ValueStream<Duration> get positionStream => _positionSubject.shareValueSeeded(Duration.zero);
@@ -202,8 +201,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       final mediaItem = _songToMediaItem(_currentSong!);
       _mediaItemSubject.add(mediaItem);
       
-      // Update media session for lock screen display
-      _mediaSessionManager.updateMediaMetadata(_currentSong!);
+      // Media session integration is handled by SystemMediaHandler
       
       // Update playback state
       _updatePlaybackState();
@@ -309,7 +307,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       await _saveQueue();
       
       // CRITICAL FIX: Start position tracking immediately for first song
-      _startPositionTimer();
+      _startPositionTimer(pausedMode: false);
       
       _loggingService.logInfo('Circular queue built with ${_queue.length} songs. Playing: ${_currentSong!.title} (index: $selectedIndex)');
       
@@ -389,7 +387,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       );
       
       await _player.play();
-      _startPositionTimer();
+      _startPositionTimer(pausedMode: false);
       
       _loggingService.logInfo('Playback started: ${_currentSong!.title}');
       
@@ -421,7 +419,11 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       );
       
       await _player.pause();
-      _stopPositionTimer();
+      
+      // CRITICAL FIX: Don't stop position timer completely during pause
+      // Keep updating position so progress bar shows correct paused position
+      // Just reduce update frequency to save battery
+      _startPositionTimer(pausedMode: true);
       
       _loggingService.logInfo('Playback paused');
       
@@ -509,16 +511,21 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
   }
 
   // Position timer for smooth progress bars
-  void _startPositionTimer() {
+  void _startPositionTimer({bool pausedMode = false}) {
     _stopPositionTimer();
     
-    _positionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    // Use different update frequencies for playing vs paused states
+    final updateInterval = pausedMode 
+        ? const Duration(milliseconds: 500)  // Slower updates when paused to save battery
+        : const Duration(milliseconds: 100); // Fast updates when playing for smooth progress
+    
+    _positionTimer = Timer.periodic(updateInterval, (timer) {
       if (!_isDisposed) {
         final position = _player.position;
         _positionSubject.add(position);
         
         // CRITICAL FIX: Always update position, even when not playing
-        // This ensures progress bar works immediately on first song
+        // This ensures progress bar works immediately on first song and shows correct paused position
         if (_player.playing || _currentSong != null) {
           _updatePlaybackState();
         }
@@ -571,18 +578,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
 
       _playbackStateSubject.add(newState);
       
-      // Update media session manager with current state
-      if (_currentSong != null) {
-        _mediaSessionManager.updatePlaybackState(
-          playing: playing,
-          position: position,
-          duration: _player.duration,
-          speed: speed,
-          shuffleEnabled: _settings.shuffleEnabled,
-          repeatMode: _mapRepeatMode(_settings.repeatMode),
-          processingState: _mapProcessingState(processingState),
-        );
-      }
+      // Media session state is handled by SystemMediaHandler automatically
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error updating playback state', e, stackTrace);
@@ -699,17 +695,17 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
 
   // Implement remaining interface methods...
   @override
-  Future<void> addQueueItems(List<MediaItem> items) async {
+  Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     try {
-      final songs = items.map(_mediaItemToSong).toList();
+      final songs = mediaItems.map(_mediaItemToSong).toList();
       _queue.addAll(songs);
       
-      final sources = items.map((item) => 
+      final sources = mediaItems.map((item) => 
           AudioSource.uri(Uri.file(item.id))).toList();
       await _playlist.addAll(sources);
       
-      final mediaItems = _queue.map(_songToMediaItem).toList();
-      _queueSubject.add(mediaItems);
+      final queueMediaItems = _queue.map(_songToMediaItem).toList();
+      _queueSubject.add(queueMediaItems);
       
       await _saveQueue();
     } catch (e, stackTrace) {
@@ -970,7 +966,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         _currentSong = _currentSong!.copyWith(isFavorite: isFavorite);
         final mediaItem = _songToMediaItem(_currentSong!);
         _mediaItemSubject.add(mediaItem);
-        _mediaSessionManager.updateMediaMetadata(_currentSong!);
+        // Media metadata is handled by SystemMediaHandler automatically
       }
     } catch (e, stackTrace) {
       _loggingService.logError('Error toggling favorite', e, stackTrace);

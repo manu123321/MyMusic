@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'services/professional_audio_handler.dart';
 import 'services/custom_audio_handler.dart';
-import 'services/system_media_handler.dart';
 import 'services/storage_service.dart';
 import 'services/logging_service.dart';
 import 'screens/loading_screen.dart';
@@ -16,7 +15,6 @@ import 'screens/error_screen.dart';
 import 'providers/music_provider.dart';
 
 late CustomAudioHandler audioHandler;
-late AudioHandler systemAudioHandler;
 
 Future<void> main() async {
   // Setup error handling for the entire app
@@ -104,15 +102,34 @@ Future<void> _initializeApp() async {
 
   // Initialize audio handler with proper error handling
   try {
-    // Initialize the internal audio handler first
-    audioHandler = ProfessionalAudioHandler();
-    await audioHandler.initialize();
+    // Initialize the professional audio handler with system integration
+    final professionalHandler = ProfessionalAudioHandler();
+    await professionalHandler.initialize();
     
-    // Initialize the system-integrated audio handler for media controls
-    systemAudioHandler = await initSystemMediaHandler(audioHandler);
+    // Register with AudioService for system integration
+    await AudioService.init(
+      builder: () => professionalHandler,
+      config: AudioServiceConfig(
+        androidNotificationChannelId: 'com.music_player.channel.audio',
+        androidNotificationChannelName: 'Music Player',
+        androidNotificationChannelDescription: 'Media playback controls for Music Player',
+        androidNotificationOngoing: false,
+        androidShowNotificationBadge: true,
+        androidNotificationIcon: 'drawable/ic_notification',
+        androidNotificationClickStartsActivity: true,
+        androidStopForegroundOnPause: false,
+        preloadArtwork: true,
+        artDownscaleWidth: 512,
+        artDownscaleHeight: 512,
+        fastForwardInterval: Duration(seconds: 10),
+        rewindInterval: Duration(seconds: 10),
+      ),
+    );
+    
+    audioHandler = professionalHandler;
     
     final loggingService = LoggingService();
-    loggingService.logInfo('Both audio handlers initialized successfully');
+    loggingService.logInfo('Audio handler with system integration initialized successfully');
   } catch (e) {
     throw AppInitializationException('Failed to initialize audio handler: $e');
   }

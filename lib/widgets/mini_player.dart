@@ -42,8 +42,7 @@ class MiniPlayer extends ConsumerWidget {
             children: [
               // Progress bar at the top
               StreamBuilder<Duration>(
-                stream: audioHandler.positionStream ?? 
-                       audioHandler.playbackState.map((state) => state.updatePosition),
+                stream: audioHandler.positionStream,
                 builder: (context, snapshot) {
                   final position = snapshot.data ?? Duration.zero;
                   final duration = currentSong.duration ?? Duration.zero;
@@ -142,8 +141,8 @@ class MiniPlayer extends ConsumerWidget {
                       // Play/Pause button - moved slightly left from edge
                       Padding(
                         padding: const EdgeInsets.only(right: 16.0),
-                        child: StreamBuilder<bool>(
-                          stream: audioHandler.playbackState.map((state) => state.playing),
+                        child:                         StreamBuilder<bool>(
+                          stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
                           builder: (context, snapshot) {
                             final isPlaying = snapshot.data ?? false;
                             return IconButton(
@@ -154,9 +153,13 @@ class MiniPlayer extends ConsumerWidget {
                                   audioHandler.play();
                                 }
                               },
-                              icon: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: Colors.white,
+                              icon: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  isPlaying ? Icons.pause : Icons.play_arrow,
+                                  key: ValueKey(isPlaying),
+                                  color: Colors.white,
+                                ),
                               ),
                               iconSize: 32,
                             );

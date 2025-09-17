@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,8 +99,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   @override
   Widget build(BuildContext context) {
     final currentSong = ref.watch(currentSongProvider).value;
-    final playbackState = ref.watch(playbackStateProvider).value;
     final audioHandler = ref.read(audioHandlerProvider);
+    
+    // CRITICAL FIX: Don't watch playbackStateProvider here as it causes entire screen rebuild
+    // Individual widgets will watch it only when needed
 
     if (currentSong == null) {
       return Scaffold(
@@ -149,6 +152,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     }
 
     return Scaffold(
+      key: const ValueKey('now_playing_screen'),
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       body: Container(
@@ -217,13 +221,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     ],
                   ),
                   child: StreamBuilder<bool>(
-                    stream: audioHandler.playbackState.map((state) => state.playing),
+                    stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
                     builder: (context, snapshot) {
                       final isPlaying = snapshot.data ?? false;
                       
-                      if (isPlaying) {
+                      // CRITICAL FIX: Control animation directly without postFrameCallback
+                      // This prevents the flicker caused by delayed animation updates
+                      if (isPlaying && !_albumArtController.isAnimating) {
                         _albumArtController.repeat();
-                      } else {
+                      } else if (!isPlaying && _albumArtController.isAnimating) {
                         _albumArtController.stop();
                       }
 
@@ -232,27 +238,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         builder: (context, child) {
                           return Transform.rotate(
                             angle: _albumArtController.value * 2 * 3.14159,
-                            child: ClipOval(
-                              child: currentSong.artUri != null
-                                  ? Image.file(
-                                      File(currentSong.artUri!.toFilePath()),
-                                      width: 300,
-                                      height: 300,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          width: 300,
-                                          height: 300,
-                                          color: Colors.grey[800],
-                                          child: const Icon(
-                                            Icons.music_note,
-                                            color: Colors.white,
-                                            size: 120,
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Container(
+                            child: child,
+                          );
+                        },
+                        child: ClipOval(
+                          child: currentSong.artUri != null
+                              ? Image.file(
+                                  File(currentSong.artUri!.toFilePath()),
+                                  width: 300,
+                                  height: 300,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
                                       width: 300,
                                       height: 300,
                                       color: Colors.grey[800],
@@ -261,10 +258,20 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                         color: Colors.white,
                                         size: 120,
                                       ),
-                                    ),
-                            ),
-                          );
-                        },
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  width: 300,
+                                  height: 300,
+                                  color: Colors.grey[800],
+                                  child: const Icon(
+                                    Icons.music_note,
+                                    color: Colors.white,
+                                    size: 120,
+                                  ),
+                                ),
+                        ),
                       );
                     },
                   ),
@@ -316,10 +323,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     StreamBuilder<Duration>(
-                      stream: audioHandler.positionStream ?? 
-                             audioHandler.playbackState.map((state) => state.updatePosition),
+                      stream: audioHandler.positionStream,
                       builder: (context, snapshot) {
-                        final position = snapshot.data ?? Duration.zero;
+                        final streamPosition = snapshot.data ?? Duration.zero;
+                        final position = _isDraggingSlider ? _sliderPosition : streamPosition;
                         final duration = currentSong.duration ?? Duration.zero;
                         
                         return Column(
@@ -335,9 +342,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 overlayColor: Colors.white.withValues(alpha: 0.2),
                               ),
                               child: Slider(
-                                value: _isDraggingSlider 
-                                    ? _sliderPosition.inMilliseconds.toDouble()
-                                    : position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
+                                value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
                                 max: duration.inMilliseconds.toDouble().clamp(1, double.infinity),
                                 onChangeStart: (value) {
                                   setState(() {
@@ -352,9 +357,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   });
                                 },
                                 onChangeEnd: (value) {
-                                  audioHandler.seek(Duration(milliseconds: value.toInt()));
+                                  final seekPosition = Duration(milliseconds: value.toInt());
+                                  audioHandler.seek(seekPosition);
                                   setState(() {
                                     _isDraggingSlider = false;
+                                    _sliderPosition = Duration.zero;
                                   });
                                   HapticFeedback.lightImpact();
                                 },
@@ -400,46 +407,56 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        IconButton(
-                          onPressed: () {
-                            // Toggle shuffle
-                            final currentShuffle = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
-                            audioHandler.setShuffleModeEnabled(!currentShuffle);
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final playbackState = ref.watch(playbackStateProvider).value;
+                            return IconButton(
+                              onPressed: () {
+                                // Toggle shuffle
+                                final currentShuffle = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
+                                audioHandler.setShuffleModeEnabled(!currentShuffle);
+                              },
+                              icon: Icon(
+                                Icons.shuffle,
+                                color: playbackState?.shuffleMode == AudioServiceShuffleMode.all
+                                    ? Colors.green
+                                    : Colors.grey[400],
+                              ),
+                            );
                           },
-                          icon: Icon(
-                            Icons.shuffle,
-                            color: playbackState?.shuffleMode == AudioServiceShuffleMode.all
-                                ? Colors.green
-                                : Colors.grey[400],
-                          ),
                         ),
-                        IconButton(
-                          onPressed: () {
-                            // Toggle repeat
-                            final currentRepeat = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
-                            AudioServiceRepeatMode nextRepeat;
-                            switch (currentRepeat) {
-                              case AudioServiceRepeatMode.none:
-                                nextRepeat = AudioServiceRepeatMode.all;
-                                break;
-                              case AudioServiceRepeatMode.all:
-                                nextRepeat = AudioServiceRepeatMode.one;
-                                break;
-                              case AudioServiceRepeatMode.one:
-                                nextRepeat = AudioServiceRepeatMode.none;
-                                break;
-                              case AudioServiceRepeatMode.group:
-                                nextRepeat = AudioServiceRepeatMode.none;
-                                break;
-                            }
-                            audioHandler.setRepeatMode(nextRepeat);
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final playbackState = ref.watch(playbackStateProvider).value;
+                            return IconButton(
+                              onPressed: () {
+                                // Toggle repeat
+                                final currentRepeat = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
+                                AudioServiceRepeatMode nextRepeat;
+                                switch (currentRepeat) {
+                                  case AudioServiceRepeatMode.none:
+                                    nextRepeat = AudioServiceRepeatMode.all;
+                                    break;
+                                  case AudioServiceRepeatMode.all:
+                                    nextRepeat = AudioServiceRepeatMode.one;
+                                    break;
+                                  case AudioServiceRepeatMode.one:
+                                    nextRepeat = AudioServiceRepeatMode.none;
+                                    break;
+                                  case AudioServiceRepeatMode.group:
+                                    nextRepeat = AudioServiceRepeatMode.none;
+                                    break;
+                                }
+                                audioHandler.setRepeatMode(nextRepeat);
+                              },
+                              icon: Icon(
+                                _getRepeatIcon(playbackState?.repeatMode ?? AudioServiceRepeatMode.none),
+                                color: playbackState?.repeatMode != AudioServiceRepeatMode.none
+                                    ? Colors.green
+                                    : Colors.grey[400],
+                              ),
+                            );
                           },
-                          icon: Icon(
-                            _getRepeatIcon(playbackState?.repeatMode ?? AudioServiceRepeatMode.none),
-                            color: playbackState?.repeatMode != AudioServiceRepeatMode.none
-                                ? Colors.green
-                                : Colors.grey[400],
-                          ),
                         ),
                         IconButton(
                           onPressed: () {
@@ -507,7 +524,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           iconSize: 40,
                         ),
                         StreamBuilder<bool>(
-                          stream: audioHandler.playbackState.map((state) => state.playing),
+                          stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
                           builder: (context, snapshot) {
                             final isPlaying = snapshot.data ?? false;
                             return GestureDetector(
@@ -515,10 +532,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 HapticFeedback.mediumImpact();
                                 if (isPlaying) {
                                   audioHandler.pause();
-                                  _albumArtController.stop();
                                 } else {
                                   audioHandler.play();
-                                  _albumArtController.repeat();
                                 }
                               },
                               child: Container(
@@ -535,10 +550,22 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                     ),
                                   ],
                                 ),
-                                child: Icon(
-                                  isPlaying ? Icons.pause : Icons.play_arrow,
-                                  color: Colors.black,
-                                  size: 40,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 150),
+                                  switchInCurve: Curves.easeInOut,
+                                  switchOutCurve: Curves.easeInOut,
+                                  transitionBuilder: (child, animation) {
+                                    return ScaleTransition(
+                                      scale: animation,
+                                      child: child,
+                                    );
+                                  },
+                                  child: Icon(
+                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                                    key: ValueKey(isPlaying),
+                                    color: Colors.black,
+                                    size: 40,
+                                  ),
                                 ),
                               ),
                             );
