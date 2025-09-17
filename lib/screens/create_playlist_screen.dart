@@ -210,7 +210,7 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
                       _descriptionFocusNode.requestFocus();
                     },
                   ),
-                  if (_nameError != null) ..[
+                  if (_nameError != null) ...[
                     const SizedBox(height: 8),
                     Text(
                       _nameError!,
@@ -314,7 +314,7 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: Colors.white.withOpacity(0.3),
+                                      color: Colors.white.withValues(alpha: 0.3),
                                       blurRadius: 8,
                                       spreadRadius: 2,
                                     ),
@@ -361,7 +361,7 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
                   });
                   HapticFeedback.selectionClick();
                 },
-                activeColor: const Color(0xFF00E676),
+                activeThumbColor: const Color(0xFF00E676),
                 contentPadding: EdgeInsets.zero,
               ),
               
