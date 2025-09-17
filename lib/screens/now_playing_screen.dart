@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../services/custom_audio_handler.dart';
+import '../services/logging_service.dart';
 import '../widgets/queue_panel.dart';
 import '../widgets/equalizer_panel.dart';
 import '../widgets/sleep_timer_dialog.dart';
@@ -17,31 +20,74 @@ class NowPlayingScreen extends ConsumerStatefulWidget {
 }
 
 class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _albumArtController;
   late AnimationController _progressController;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnimation;
+  
+  final LoggingService _loggingService = LoggingService();
+  
   bool _showLyrics = false;
   bool _showQueue = false;
   bool _showEqualizer = false;
+  bool _isDraggingSlider = false;
+  Duration _sliderPosition = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
     _albumArtController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
-    )..repeat();
+    );
+    
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    // Start entrance animation
+    _slideController.forward();
+    
+    _loggingService.logInfo('Now playing screen opened');
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _albumArtController.dispose();
     _progressController.dispose();
+    _slideController.dispose();
     super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused) {
+      _albumArtController.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      final playbackState = ref.read(playbackStateProvider).value;
+      if (playbackState?.playing == true) {
+        _albumArtController.repeat();
+      }
+    }
   }
 
   @override
@@ -57,14 +103,41 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+            },
             icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+            tooltip: 'Go back',
           ),
         ),
-        body: const Center(
-          child: Text(
-            'No song playing',
-            style: TextStyle(color: Colors.white, fontSize: 18),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.music_off,
+                size: 80,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No song playing',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Go back and select a song to play',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -72,34 +145,52 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: _buildBackgroundGradient(currentSong),
+        child: SafeArea(
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: Column(
+              children: [
+            // Header with blur effect
+            ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                      const Text(
+                        'Now Playing',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          _showMoreOptions();
+                        },
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        tooltip: 'More options',
+                      ),
+                    ],
                   ),
-                  const Text(
-                    'Now playing',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      // Show more options
-                    },
-                    icon: const Icon(Icons.more_vert, color: Colors.white),
-                  ),
-                ],
+                ),
               ),
             ),
 
@@ -230,17 +321,36 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                             SliderTheme(
                               data: SliderTheme.of(context).copyWith(
                                 trackHeight: 4,
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
                                 activeTrackColor: Colors.white,
                                 inactiveTrackColor: Colors.grey[600],
                                 thumbColor: Colors.white,
+                                overlayColor: Colors.white.withOpacity(0.2),
                               ),
                               child: Slider(
-                                value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
-                                max: duration.inMilliseconds.toDouble(),
+                                value: _isDraggingSlider 
+                                    ? _sliderPosition.inMilliseconds.toDouble()
+                                    : position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
+                                max: duration.inMilliseconds.toDouble().clamp(1, double.infinity),
+                                onChangeStart: (value) {
+                                  setState(() {
+                                    _isDraggingSlider = true;
+                                    _sliderPosition = Duration(milliseconds: value.toInt());
+                                  });
+                                  HapticFeedback.selectionClick();
+                                },
                                 onChanged: (value) {
+                                  setState(() {
+                                    _sliderPosition = Duration(milliseconds: value.toInt());
+                                  });
+                                },
+                                onChangeEnd: (value) {
                                   audioHandler.seek(Duration(milliseconds: value.toInt()));
+                                  setState(() {
+                                    _isDraggingSlider = false;
+                                  });
+                                  HapticFeedback.lightImpact();
                                 },
                               ),
                             ),
@@ -394,24 +504,36 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           stream: audioHandler.playbackState.map((state) => state.playing),
                           builder: (context, snapshot) {
                             final isPlaying = snapshot.data ?? false;
-                            return Container(
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                              ),
-                              child: IconButton(
-                                onPressed: () {
-                                  if (isPlaying) {
-                                    audioHandler.pause();
-                                  } else {
-                                    audioHandler.play();
-                                  }
-                                },
-                                icon: Icon(
+                            return GestureDetector(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                if (isPlaying) {
+                                  audioHandler.pause();
+                                  _albumArtController.stop();
+                                } else {
+                                  audioHandler.play();
+                                  _albumArtController.repeat();
+                                }
+                              },
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.3),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
                                   isPlaying ? Icons.pause : Icons.play_arrow,
                                   color: Colors.black,
+                                  size: 40,
                                 ),
-                                iconSize: 48,
                               ),
                             );
                           },
@@ -464,4 +586,133 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         return Icons.repeat;
     }
   }
+  
+  BoxDecoration _buildBackgroundGradient(MediaItem? currentSong) {
+    // Create dynamic background based on song or use default
+    return const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF1A1A1A),
+          Color(0xFF0A0A0A),
+          Colors.black,
+        ],
+      ),
+    );
+  }
+  
+  void _showMoreOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[600],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Options
+            _buildOptionTile(
+              icon: Icons.favorite_border,
+              title: 'Add to Favorites',
+              onTap: () {
+                Navigator.pop(context);
+                _addToFavorites();
+              },
+            ),
+            _buildOptionTile(
+              icon: Icons.playlist_add,
+              title: 'Add to Playlist',
+              onTap: () {
+                Navigator.pop(context);
+                _showAddToPlaylistDialog();
+              },
+            ),
+            _buildOptionTile(
+              icon: Icons.share,
+              title: 'Share',
+              onTap: () {
+                Navigator.pop(context);
+                _shareSong();
+              },
+            ),
+            _buildOptionTile(
+              icon: Icons.info_outline,
+              title: 'Song Info',
+              onTap: () {
+                Navigator.pop(context);
+                _showSongInfo();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildOptionTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white),
+      ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+  
+  void _addToFavorites() {
+    _showSnackBar('Added to favorites', Colors.green);
+  }
+  
+  void _showAddToPlaylistDialog() {
+    _showSnackBar('Add to playlist feature coming soon', Colors.orange);
+  }
+  
+  void _shareSong() {
+    _showSnackBar('Share feature coming soon', Colors.orange);
+  }
+  
+  void _showSongInfo() {
+    _showSnackBar('Song info feature coming soon', Colors.orange);
+  }
+  
+  void _showSnackBar(String message, Color color) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
 }
+

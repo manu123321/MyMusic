@@ -30,14 +30,21 @@ class SongAdapter extends TypeAdapter<Song> {
       dateAdded: fields[10] as DateTime,
       lastPlayed: fields[11] as DateTime?,
       playCount: fields[12] as int,
+      rating: fields[13] as double?,
       lyricsPath: fields[14] as String?,
+      isFavorite: fields[15] as bool,
+      fileSize: fields[16] as int,
+      albumArtist: fields[17] as String?,
+      composer: fields[18] as String?,
+      discNumber: fields[19] as int?,
+      bitrate: fields[20] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, Song obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -64,8 +71,22 @@ class SongAdapter extends TypeAdapter<Song> {
       ..write(obj.lastPlayed)
       ..writeByte(12)
       ..write(obj.playCount)
+      ..writeByte(13)
+      ..write(obj.rating)
       ..writeByte(14)
-      ..write(obj.lyricsPath);
+      ..write(obj.lyricsPath)
+      ..writeByte(15)
+      ..write(obj.isFavorite)
+      ..writeByte(16)
+      ..write(obj.fileSize)
+      ..writeByte(17)
+      ..write(obj.albumArtist)
+      ..writeByte(18)
+      ..write(obj.composer)
+      ..writeByte(19)
+      ..write(obj.discNumber)
+      ..writeByte(20)
+      ..write(obj.bitrate);
   }
 
   @override

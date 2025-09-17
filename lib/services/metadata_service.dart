@@ -1,42 +1,70 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:isolate';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/song.dart';
+import 'logging_service.dart';
 
 class MetadataService {
   static final MetadataService _instance = MetadataService._internal();
   factory MetadataService() => _instance;
   MetadataService._internal();
+  
+  final LoggingService _loggingService = LoggingService();
+  
+  // Reusable AudioPlayer instance to avoid memory leaks
+  AudioPlayer? _audioPlayer;
+  
+  // Cache for file metadata to avoid repeated operations
+  final Map<String, Map<String, dynamic>> _metadataCache = {};
+  
+  // Supported audio formats
+  static const List<String> _supportedFormats = [
+    '.mp3', '.aac', '.m4a', '.wav', '.flac', '.ogg', '.wma', '.aiff', '.opus'
+  ];
 
-  /// Scan device storage for audio files
+  /// Scan device storage for audio files with optimized performance
   Future<List<Song>> scanDeviceForAudioFiles() async {
     try {
+      _loggingService.logInfo('Starting device scan for audio files');
+      
       // Check permissions first
       if (!await _checkAndRequestPermissions()) {
-        print('Permissions not granted for media access');
+        _loggingService.logWarning('Permissions not granted for media access');
         return [];
       }
 
+      // Initialize audio player if needed
+      await _ensureAudioPlayerInitialized();
+      
       List<Song> songs = [];
       
       // Get common music directories
       final musicDirectories = await _getMusicDirectories();
+      _loggingService.logInfo('Scanning ${musicDirectories.length} directories');
       
       for (final directory in musicDirectories) {
         if (await directory.exists()) {
-          final directorySongs = await _scanDirectory(directory);
-          songs.addAll(directorySongs);
+          try {
+            final directorySongs = await _scanDirectory(directory);
+            songs.addAll(directorySongs);
+            _loggingService.logDebug('Found ${directorySongs.length} songs in ${directory.path}');
+          } catch (e, stackTrace) {
+            _loggingService.logError('Error scanning directory ${directory.path}', e, stackTrace);
+            // Continue with other directories
+          }
         }
       }
       
-      print('Found ${songs.length} audio files');
+      _loggingService.logInfo('Scan completed: found ${songs.length} audio files');
       return songs;
-    } catch (e) {
-      print('Error scanning device for audio files: $e');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error scanning device for audio files', e, stackTrace);
       return [];
     }
   }
@@ -120,44 +148,84 @@ class MetadataService {
     return songs;
   }
 
-  /// Create a Song object from a file
+  /// Create a Song object from a file with enhanced metadata extraction
   Future<Song?> _createSongFromFile(File file) async {
     try {
-      final fileName = path.basename(file.path);
+      final filePath = file.path;
+      
+      // Check cache first
+      if (_metadataCache.containsKey(filePath)) {
+        final cachedData = _metadataCache[filePath]!;
+        return _createSongFromCachedData(file, cachedData);
+      }
+      
+      // Validate file
+      if (!await _validateAudioFile(file)) {
+        return null;
+      }
+      
+      final fileName = path.basename(filePath);
       
       // Extract basic metadata from filename
       final title = _extractTitleFromFileName(fileName);
       final artist = _extractArtistFromFileName(fileName);
       final album = _extractAlbumFromFileName(fileName);
       
-      // Extract duration using just_audio
+      // Get file stats
+      final fileStat = await file.stat();
+      final fileSize = fileStat.size;
+      
+      // Extract duration using reusable audio player
       int duration = 0;
+      int bitrate = 0;
+      
       try {
-        final audioPlayer = AudioPlayer();
-        await audioPlayer.setFilePath(file.path);
-        final durationObj = audioPlayer.duration;
+        await _ensureAudioPlayerInitialized();
+        await _audioPlayer!.setFilePath(filePath);
+        
+        final durationObj = _audioPlayer!.duration;
         if (durationObj != null) {
           duration = durationObj.inMilliseconds;
+          
+          // Estimate bitrate
+          if (duration > 0) {
+            bitrate = ((fileSize * 8) / (duration / 1000) / 1000).round();
+          }
         }
-        await audioPlayer.dispose();
-      } catch (e) {
-        print('Error extracting duration from ${file.path}: $e');
+        
+        // Don't dispose here - reuse for next file
+      } catch (e, stackTrace) {
+        _loggingService.logWarning('Error extracting duration from $filePath', e);
       }
       
+      // Create metadata cache entry
+      final metadata = {
+        'title': title,
+        'artist': artist,
+        'album': album,
+        'duration': duration,
+        'fileSize': fileSize,
+        'bitrate': bitrate,
+        'lastModified': fileStat.modified.millisecondsSinceEpoch,
+      };
+      _metadataCache[filePath] = metadata;
+      
       final song = Song(
-        id: file.path.hashCode.toString(), // Use file path hash as unique ID
+        id: filePath.hashCode.toString(),
         title: title,
         artist: artist,
         album: album,
-        filePath: file.path,
+        filePath: filePath,
         duration: duration,
+        fileSize: fileSize,
+        bitrate: bitrate,
         dateAdded: DateTime.now(),
         playCount: 0,
       );
       
       return song;
-    } catch (e) {
-      print('Error creating song from file ${file.path}: $e');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error creating song from file ${file.path}', e, stackTrace);
       return null;
     }
   }
@@ -200,53 +268,48 @@ class MetadataService {
     return 'Unknown Album';
   }
 
-  /// Pick audio files using file picker
+  /// Pick audio files using file picker with enhanced processing
   Future<List<Song>> pickAudioFiles() async {
     try {
+      _loggingService.logInfo('Starting file picker for audio files');
+      
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: true,
+        allowCompression: false,
       );
 
-      if (result != null) {
-        List<Song> songs = [];
+      if (result != null && result.files.isNotEmpty) {
+        _loggingService.logInfo('User selected ${result.files.length} files');
         
-        for (PlatformFile file in result.files) {
-          if (file.path != null && isSupportedAudioFormat(file.path!)) {
-            // Extract duration using just_audio
-            int duration = 0;
+        List<Song> songs = [];
+        await _ensureAudioPlayerInitialized();
+        
+        for (PlatformFile platformFile in result.files) {
+          if (platformFile.path != null && isSupportedAudioFormat(platformFile.path!)) {
             try {
-              final audioPlayer = AudioPlayer();
-              await audioPlayer.setFilePath(file.path!);
-              final durationObj = audioPlayer.duration;
-              if (durationObj != null) {
-                duration = durationObj.inMilliseconds;
+              final file = File(platformFile.path!);
+              final song = await _createSongFromFile(file);
+              if (song != null) {
+                songs.add(song);
               }
-              await audioPlayer.dispose();
-            } catch (e) {
-              print('Error extracting duration from ${file.path}: $e');
+            } catch (e, stackTrace) {
+              _loggingService.logError('Error processing picked file ${platformFile.path}', e, stackTrace);
+              // Continue with other files
             }
-            
-            final song = Song(
-              id: file.path!.hashCode.toString(), // Use file path hash as unique ID
-              title: _extractTitleFromFileName(file.name),
-              artist: 'Unknown Artist',
-              album: 'Unknown Album',
-              filePath: file.path!,
-              duration: duration,
-              dateAdded: DateTime.now(),
-              playCount: 0,
-            );
-            songs.add(song);
+          } else {
+            _loggingService.logWarning('Unsupported file format: ${platformFile.path}');
           }
         }
         
+        _loggingService.logInfo('Successfully processed ${songs.length} audio files');
         return songs;
       }
       
+      _loggingService.logInfo('File picker cancelled by user');
       return [];
-    } catch (e) {
-      print('Error picking audio files: $e');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error picking audio files', e, stackTrace);
       return [];
     }
   }
@@ -333,9 +396,7 @@ class MetadataService {
   /// Check if file is a supported audio format
   bool isSupportedAudioFormat(String filePath) {
     final extension = path.extension(filePath).toLowerCase();
-    return [
-      '.mp3', '.aac', '.m4a', '.wav', '.flac', '.ogg', '.wma', '.aiff'
-    ].contains(extension);
+    return _supportedFormats.contains(extension);
   }
 
   /// Get file size in bytes
@@ -370,6 +431,112 @@ class MetadataService {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     } else {
       return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+  }
+  
+  /// Helper methods for optimization
+  Future<void> _ensureAudioPlayerInitialized() async {
+    if (_audioPlayer == null) {
+      _audioPlayer = AudioPlayer();
+      _loggingService.logDebug('Initialized reusable AudioPlayer');
+    }
+  }
+  
+  Future<bool> _validateAudioFile(File file) async {
+    try {
+      // Check if file exists
+      if (!await file.exists()) {
+        _loggingService.logWarning('File does not exist: ${file.path}');
+        return false;
+      }
+      
+      // Check file size (minimum 1KB, maximum 500MB)
+      final fileSize = await file.length();
+      if (fileSize < 1024) {
+        _loggingService.logWarning('File too small: ${file.path} (${fileSize} bytes)');
+        return false;
+      }
+      
+      if (fileSize > 500 * 1024 * 1024) {
+        _loggingService.logWarning('File too large: ${file.path} (${formatFileSize(fileSize)})');
+        return false;
+      }
+      
+      // Check if file is readable
+      try {
+        await file.openRead(0, 1024).drain();
+      } catch (e) {
+        _loggingService.logWarning('File not readable: ${file.path}');
+        return false;
+      }
+      
+      return true;
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error validating audio file: ${file.path}', e, stackTrace);
+      return false;
+    }
+  }
+  
+  Song _createSongFromCachedData(File file, Map<String, dynamic> cachedData) {
+    return Song(
+      id: file.path.hashCode.toString(),
+      title: cachedData['title'] ?? 'Unknown Title',
+      artist: cachedData['artist'] ?? 'Unknown Artist',
+      album: cachedData['album'] ?? 'Unknown Album',
+      filePath: file.path,
+      duration: cachedData['duration'] ?? 0,
+      fileSize: cachedData['fileSize'] ?? 0,
+      bitrate: cachedData['bitrate'] ?? 0,
+      dateAdded: DateTime.now(),
+      playCount: 0,
+    );
+  }
+  
+  /// Batch process files for better performance
+  Future<List<Song>> _processBatchFiles(List<File> files) async {
+    const batchSize = 20;
+    final List<Song> allSongs = [];
+    
+    for (int i = 0; i < files.length; i += batchSize) {
+      final batch = files.skip(i).take(batchSize);
+      final batchSongs = await Future.wait(
+        batch.map((file) => _createSongFromFile(file)),
+      );
+      
+      allSongs.addAll(batchSongs.whereType<Song>());
+      
+      // Small delay to prevent blocking UI
+      if (i + batchSize < files.length) {
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+    }
+    
+    return allSongs;
+  }
+  
+  /// Clear metadata cache
+  void clearCache() {
+    _metadataCache.clear();
+    _loggingService.logInfo('Metadata cache cleared');
+  }
+  
+  /// Get cache statistics
+  Map<String, dynamic> getCacheStats() {
+    return {
+      'cacheSize': _metadataCache.length,
+      'memoryUsage': _metadataCache.length * 500, // Rough estimate
+    };
+  }
+  
+  /// Dispose resources
+  Future<void> dispose() async {
+    try {
+      await _audioPlayer?.dispose();
+      _audioPlayer = null;
+      _metadataCache.clear();
+      _loggingService.logInfo('MetadataService disposed');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error disposing MetadataService', e, stackTrace);
     }
   }
 }

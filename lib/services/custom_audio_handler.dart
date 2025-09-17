@@ -1,30 +1,60 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
+import '../models/playback_settings.dart';
 
 /// Custom interface that includes AudioHandler methods plus additional ones
+/// This interface defines all audio playback functionality for the music player
 abstract class CustomAudioHandler {
-  // AudioHandler methods
+  // Core AudioHandler methods
   ValueStream<MediaItem?> get mediaItem;
   ValueStream<PlaybackState> get playbackState;
   ValueStream<List<MediaItem>> get queue;
   
+  // Basic playback controls
   Future<void> play();
   Future<void> pause();
   Future<void> stop();
   Future<void> seek(Duration position);
   Future<void> skipToNext();
   Future<void> skipToPrevious();
-  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode);
+  
+  // Queue management
   Future<void> addQueueItems(List<MediaItem> items);
   Future<void> addQueueItem(MediaItem mediaItem);
   Future<void> removeQueueItem(MediaItem mediaItem);
   Future<void> clearQueue();
   Future<void> setQueue(List<MediaItem> items);
-  Future<void> customAction(String name, [Map<String, dynamic>? extras]);
   
-  // Additional custom methods
+  // Playback settings
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode);
+  Future<void> setShuffleModeEnabled(bool enabled);
+  Future<void> setPlaybackSpeed(double speed);
+  Future<void> setVolume(double volume);
+  
+  // Advanced features
   Future<void> startSleepTimer(int minutes);
   Future<void> cancelSleepTimer();
-  Future<void> setPlaybackSpeed(double speed);
-  Future<void> setShuffleModeEnabled(bool enabled);
+  Future<void> setEqualizerSettings(Map<String, double> settings);
+  Future<void> setCrossfadeDuration(int seconds);
+  Future<void> setGaplessPlayback(bool enabled);
+  
+  // Audio enhancements
+  Future<void> setBassBoost(double boost);
+  Future<void> setTrebleBoost(double boost);
+  Future<void> setSkipSilence(bool skip);
+  
+  // Utility methods
+  Future<void> customAction(String name, [Map<String, dynamic>? extras]);
+  Future<void> initialize();
+  Future<void> dispose();
+  
+  // State queries
+  bool get isInitialized;
+  PlaybackSettings get currentSettings;
+  Duration? get currentPosition;
+  Duration? get currentDuration;
+  
+  // Error handling
+  Stream<String> get errorStream;
+  Future<void> recover();
 }

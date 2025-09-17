@@ -485,8 +485,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         },
       );
       
-      // Clear current queue and add this song
-      await audioHandler.addQueueItems([mediaItem]);
+      // Set this song as the only song in the queue
+      await audioHandler.setQueue([mediaItem]);
       
       // Start playing
       await audioHandler.play();

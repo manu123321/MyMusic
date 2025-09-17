@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import '../providers/music_provider.dart';
 import '../models/playback_settings.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
+import '../services/storage_service.dart';
+import '../services/logging_service.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
+  
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final LoggingService _loggingService = LoggingService();
+  bool _isExporting = false;
+  bool _isImporting = false;
+  bool _isScanning = false;
+  bool _isClearing = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final settings = ref.watch(playbackSettingsProvider);
 
     return Scaffold(
@@ -117,47 +133,30 @@ class SettingsScreen extends ConsumerWidget {
             'Scan for Music',
             'Find new music files on device',
             Icons.refresh,
-            () async {
-              final metadataService = ref.read(metadataServiceProvider);
-              final newSongs = await metadataService.scanDeviceForAudioFiles();
-              if (newSongs.isNotEmpty) {
-                for (final song in newSongs) {
-                  await ref.read(songsProvider.notifier).addSong(song);
-                }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Found ${newSongs.length} new music files'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('No new music files found'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            },
+            _isScanning ? null : _scanForMusic,
+            isLoading: _isScanning,
           ),
           _buildActionTile(
             'Export Data',
             'Backup playlists and settings',
             Icons.backup,
-            () => _exportData(context, ref),
+            _isExporting ? null : _exportData,
+            isLoading: _isExporting,
           ),
           _buildActionTile(
             'Import Data',
             'Restore from backup',
             Icons.restore,
-            () => _importData(context, ref),
+            _isImporting ? null : _importData,
+            isLoading: _isImporting,
           ),
           _buildActionTile(
             'Clear All Data',
             'Remove all songs and playlists',
             Icons.delete_forever,
-            () => _showClearDataDialog(context, ref),
+            _isClearing ? null : _showClearDataDialog,
             isDestructive: true,
+            isLoading: _isClearing,
           ),
 
           const SizedBox(height: 32),
@@ -280,14 +279,26 @@ class SettingsScreen extends ConsumerWidget {
     String title,
     String subtitle,
     IconData icon,
-    VoidCallback onTap, {
+    VoidCallback? onTap, {
     bool isDestructive = false,
+    bool isLoading = false,
   }) {
     return ListTile(
-      leading: Icon(
-        icon,
-        color: isDestructive ? Colors.red : Colors.white,
-      ),
+      leading: isLoading
+          ? SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isDestructive ? Colors.red : const Color(0xFF00E676),
+                ),
+              ),
+            )
+          : Icon(
+              icon,
+              color: isDestructive ? Colors.red : Colors.white,
+            ),
       title: Text(
         title,
         style: TextStyle(
@@ -298,8 +309,11 @@ class SettingsScreen extends ConsumerWidget {
         subtitle,
         style: TextStyle(color: Colors.grey[400]),
       ),
-      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+      trailing: onTap != null
+          ? const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16)
+          : null,
       onTap: onTap,
+      enabled: onTap != null,
     );
   }
 
@@ -355,60 +369,207 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _exportData(BuildContext context, WidgetRef ref) {
-    // TODO: Implement data export
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Export feature coming soon'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+  Future<void> _scanForMusic() async {
+    setState(() {
+      _isScanning = true;
+    });
+    
+    try {
+      _loggingService.logInfo('Starting manual music scan');
+      
+      final metadataService = ref.read(metadataServiceProvider);
+      final newSongs = await metadataService.scanDeviceForAudioFiles();
+      
+      if (newSongs.isNotEmpty) {
+        // Add songs in batches
+        await ref.read(storageServiceProvider).saveSongs(newSongs);
+        await ref.read(songsProvider.notifier).loadSongs();
+        
+        _loggingService.logInfo('Found ${newSongs.length} new music files');
+        
+        _showSuccessSnackBar('Found ${newSongs.length} new music files');
+      } else {
+        _showInfoSnackBar('No new music files found');
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error scanning for music', e, stackTrace);
+      _showErrorSnackBar('Error scanning for music: ${_getDisplayError(e)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _exportData() async {
+    setState(() {
+      _isExporting = true;
+    });
+    
+    try {
+      _loggingService.logInfo('Starting data export');
+      
+      final storageService = ref.read(storageServiceProvider);
+      final exportData = await storageService.exportData();
+      
+      // Save to file
+      final fileName = 'music_player_backup_${DateTime.now().millisecondsSinceEpoch}.json';
+      
+      // For now, just copy to clipboard (you can enhance this to save to file)
+      await Clipboard.setData(ClipboardData(text: exportData));
+      
+      _loggingService.logInfo('Data exported successfully');
+      _showSuccessSnackBar('Data exported to clipboard');
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error exporting data', e, stackTrace);
+      _showErrorSnackBar('Error exporting data: ${_getDisplayError(e)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
   }
 
-  void _importData(BuildContext context, WidgetRef ref) {
-    // TODO: Implement data import
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Import feature coming soon'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+  Future<void> _importData() async {
+    setState(() {
+      _isImporting = true;
+    });
+    
+    try {
+      _loggingService.logInfo('Starting data import');
+      
+      // Pick file
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final jsonData = await file.readAsString();
+        
+        final storageService = ref.read(storageServiceProvider);
+        await storageService.importData(jsonData);
+        
+        // Refresh providers
+        await ref.read(songsProvider.notifier).loadSongs();
+        await ref.read(playlistsProvider.notifier).loadPlaylists();
+        await ref.read(playbackSettingsProvider.notifier).loadSettings();
+        
+        _loggingService.logInfo('Data imported successfully');
+        _showSuccessSnackBar('Data imported successfully');
+      } else {
+        _showInfoSnackBar('Import cancelled');
+      }
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error importing data', e, stackTrace);
+      _showErrorSnackBar('Error importing data: ${_getDisplayError(e)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
   }
 
-  void _showClearDataDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
+  Future<void> _showClearDataDialog() async {
+    final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Clear All Data',
-          style: TextStyle(color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
-        content: const Text(
-          'This will remove all songs, playlists, and settings. This action cannot be undone.',
-          style: TextStyle(color: Colors.white),
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 8),
+            Text(
+              'Clear All Data',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will permanently remove:',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 12),
+            Text('• All songs from your library', style: TextStyle(color: Colors.white)),
+            Text('• All playlists', style: TextStyle(color: Colors.white)),
+            Text('• All settings and preferences', style: TextStyle(color: Colors.white)),
+            Text('• All playback history', style: TextStyle(color: Colors.white)),
+            SizedBox(height: 16),
+            Text(
+              'This action cannot be undone.',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
-          TextButton(
-            onPressed: () {
-              // TODO: Implement clear all data
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Clear data feature coming soon'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            },
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Clear All Data'),
           ),
         ],
       ),
     );
+    
+    if (confirmed == true) {
+      await _clearAllData();
+    }
+  }
+  
+  Future<void> _clearAllData() async {
+    setState(() {
+      _isClearing = true;
+    });
+    
+    try {
+      _loggingService.logInfo('Starting data clear operation');
+      
+      final storageService = ref.read(storageServiceProvider);
+      await storageService.clearAllData();
+      
+      // Refresh all providers
+      await ref.read(songsProvider.notifier).loadSongs();
+      await ref.read(playlistsProvider.notifier).loadPlaylists();
+      await ref.read(playbackSettingsProvider.notifier).loadSettings();
+      
+      _loggingService.logInfo('All data cleared successfully');
+      _showSuccessSnackBar('All data cleared successfully');
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error clearing data', e, stackTrace);
+      _showErrorSnackBar('Error clearing data: ${_getDisplayError(e)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClearing = false;
+        });
+      }
+    }
   }
 
   void _showLegalNotice(BuildContext context) {
@@ -416,9 +577,18 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Legal Notice',
-          style: TextStyle(color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.gavel, color: Colors.blue),
+            SizedBox(width: 8),
+            Text(
+              'Legal Notice',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
         ),
         content: const SingleChildScrollView(
           child: Text(
@@ -430,16 +600,91 @@ class SettingsScreen extends ConsumerWidget {
             '• This app does not include any code that attempts to access streaming services or copyrighted content\n'
             '• All music files must be legally obtained and stored locally on the user\'s device\n\n'
             'Respect copyright laws and only play music you have the right to use.',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Colors.white, height: 1.5),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            child: const Text('I Understand', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
     );
+  }
+  
+  String _getDisplayError(Object error) {
+    final errorStr = error.toString().toLowerCase();
+    if (errorStr.contains('permission')) {
+      return 'Permission denied';
+    } else if (errorStr.contains('storage') || errorStr.contains('database')) {
+      return 'Storage error';
+    } else if (errorStr.contains('file')) {
+      return 'File operation failed';
+    }
+    return 'Unknown error occurred';
+  }
+  
+  void _showSuccessSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.green[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+  
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+  
+  void _showInfoSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Colors.orange[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
   }
 }

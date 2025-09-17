@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
@@ -7,6 +8,7 @@ import '../models/song.dart';
 import '../models/playlist.dart';
 import '../services/custom_audio_handler.dart';
 import '../services/storage_service.dart';
+import '../services/logging_service.dart';
 import 'settings_screen.dart';
 import 'now_playing_screen.dart';
 import 'playlist_screen.dart';
@@ -18,19 +20,70 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final LoggingService _loggingService = LoggingService();
+  
   String _searchQuery = '';
   bool _isSearching = false;
+  bool _isLoading = false;
+  String? _errorMessage;
+  
+  // Performance optimization - keep alive
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _searchFocusNode.addListener(_onSearchFocusChanged);
+    _loadInitialData();
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _refreshData();
+    }
+  }
+  
+  void _onSearchFocusChanged() {
+    if (!_searchFocusNode.hasFocus && _searchQuery.isEmpty) {
+      setState(() {
+        _isSearching = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    return _buildContent();
+  }
+  
+  Widget _buildContent() {
+    if (_isLoading) {
+      return _buildLoadingState();
+    }
+    
+    if (_errorMessage != null) {
+      return _buildErrorState();
+    }
+    
     final songs = ref.watch(songsProvider);
 
     // Filter songs based on search
@@ -46,16 +99,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header with search
-            _buildHeader(),
-            
-            // Main content
-            Expanded(
-              child: _buildMainContent(filteredSongs),
-            ),
-          ],
+        child: RefreshIndicator(
+          onRefresh: _refreshData,
+          color: const Color(0xFF00E676),
+          backgroundColor: Colors.grey[900],
+          child: Column(
+            children: [
+              // Header with search
+              _buildHeader(),
+              
+              // Main content
+              Expanded(
+                child: _buildMainContent(filteredSongs),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -107,40 +165,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 16),
                     
           // Search bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _isSearching = value.isNotEmpty;
-                });
-              },
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search songs, artists, albums...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
-                suffixIcon: _isSearching
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                            _isSearching = false;
-                          });
-                        },
-                        icon: Icon(Icons.clear, color: Colors.grey[400]),
-                      )
+          Semantics(
+            label: 'Search music',
+            hint: 'Search for songs, artists, or albums',
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(25),
+                border: _searchFocusNode.hasFocus 
+                    ? Border.all(color: const Color(0xFF00E676), width: 2)
                     : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 15,
+              ),
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: _onSearchChanged,
+                style: const TextStyle(color: Colors.white),
+                textInputAction: TextInputAction.search,
+                onSubmitted: _onSearchSubmitted,
+                decoration: InputDecoration(
+                  hintText: 'Search songs, artists, albums...',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  prefixIcon: Icon(
+                    Icons.search, 
+                    color: _searchFocusNode.hasFocus 
+                        ? const Color(0xFF00E676) 
+                        : Colors.grey[400],
+                  ),
+                  suffixIcon: _isSearching
+                      ? IconButton(
+                          onPressed: _clearSearch,
+                          icon: Icon(Icons.clear, color: Colors.grey[400]),
+                          tooltip: 'Clear search',
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 15,
+                  ),
                 ),
               ),
             ),
@@ -186,20 +249,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         
         // Songs list
         Expanded(
-          child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: songs.length,
-            addAutomaticKeepAlives: false,
-            addRepaintBoundaries: false,
-            itemBuilder: (context, index) {
-              final song = songs[index];
-              return SongListTile(
-                              song: song,
-                onTap: () => _playSong(song),
-                      );
-                    },
+          child: songs.isEmpty
+              ? _buildEmptySearchResults()
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: songs.length,
+                  addAutomaticKeepAlives: false,
+                  addRepaintBoundaries: false,
+                  cacheExtent: 500, // Performance optimization
+                  itemBuilder: (context, index) {
+                    final song = songs[index];
+                    return SongListTile(
+                      song: song,
+                      onTap: () => _playSong(song),
+                    );
+                  },
                 ),
-              ),
+        ),
             ],
     );
   }
@@ -238,8 +304,180 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  // New helper methods
+  Future<void> _loadInitialData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+      
+      // Load songs if empty
+      final songs = ref.read(songsProvider);
+      if (songs.isEmpty) {
+        await ref.read(songsProvider.notifier).loadSongs();
+      }
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to load initial data', e, stackTrace);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load music library';
+      });
+    }
+  }
+  
+  Future<void> _refreshData() async {
+    try {
+      await ref.read(songsProvider.notifier).loadSongs();
+      HapticFeedback.lightImpact();
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to refresh data', e, stackTrace);
+    }
+  }
+  
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value;
+      _isSearching = value.isNotEmpty;
+    });
+  }
+  
+  void _onSearchSubmitted(String value) {
+    _searchFocusNode.unfocus();
+    if (value.isNotEmpty) {
+      _loggingService.logInfo('User searched for: $value');
+    }
+  }
+  
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _isSearching = false;
+    });
+    _searchFocusNode.unfocus();
+    HapticFeedback.selectionClick();
+  }
+  
+  Widget _buildLoadingState() {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00E676)),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Loading your music...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildErrorState() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 80,
+                color: Colors.red[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Something went wrong',
+                style: TextStyle(
+                  color: Colors.grey[300],
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage ?? 'Unknown error occurred',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadInitialData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E676),
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Try Again'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildEmptySearchResults() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 80,
+            color: Colors.grey[600],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No results found',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try searching with different keywords',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
   Future<void> _playSong(Song song) async {
     try {
+      // Haptic feedback
+      HapticFeedback.selectionClick();
+      
+      // Validate song file exists
+      if (!song.fileExists) {
+        _showErrorSnackBar('Song file not found: ${song.title}');
+        return;
+      }
+      
       final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
       
       // Convert song to MediaItem
@@ -265,29 +503,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await audioHandler.seek(Duration.zero);
       await audioHandler.play();
       
-      // Update recently played
-      await ref.read(storageServiceProvider).addToRecentlyPlayed(song.id);
-      await ref.read(storageServiceProvider).updateSongPlayCount(song.id);
+      // Update recently played and play count
+      await Future.wait([
+        ref.read(storageServiceProvider).addToRecentlyPlayed(song.id),
+        ref.read(storageServiceProvider).updateSongPlayCount(song.id),
+      ]);
       
-      // Small delay to ensure the player is ready
-      await Future.delayed(const Duration(milliseconds: 100));
+      _loggingService.logInfo('Started playing: ${song.title}');
       
       // Navigate to now playing screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const NowPlayingScreen(),
-        ),
-      );
-    } catch (e) {
-      print('Error playing song: $e');
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const NowPlayingScreen(),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error playing song: ${song.title}', e, stackTrace);
+      _showErrorSnackBar('Unable to play ${song.title}');
+    }
+  }
+  
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error playing song: $e'),
-          backgroundColor: Colors.red,
+          content: Text(message),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     }
   }
-
-
 }

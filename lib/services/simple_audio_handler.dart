@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
@@ -8,6 +10,7 @@ import '../models/playback_settings.dart';
 import '../models/queue_item.dart';
 import 'storage_service.dart';
 import 'custom_audio_handler.dart';
+import 'logging_service.dart';
 
 /// Simple audio handler that implements CustomAudioHandler interface
 class SimpleAudioHandler implements CustomAudioHandler {
@@ -19,19 +22,28 @@ class SimpleAudioHandler implements CustomAudioHandler {
   late final StreamSubscription<Duration?> _durationSub;
 
   final StorageService _storageService = StorageService();
+  final LoggingService _loggingService = LoggingService();
   PlaybackSettings _settings = PlaybackSettings();
   Timer? _sleepTimer;
   bool _isInitialized = false;
+  bool _isDisposed = false;
+  
+  // Error tracking
+  int _consecutiveErrors = 0;
+  static const int _maxConsecutiveErrors = 5;
 
   // BehaviorSubjects for UI compatibility
   final _currentSongSubject = BehaviorSubject<MediaItem?>();
   final _playbackStateSubject = BehaviorSubject<PlaybackState>();
   final _queueSubject = BehaviorSubject<List<MediaItem>>();
+  final _errorSubject = BehaviorSubject<String>();
 
   List<Song> _currentSongs = [];
   int _currentIndex = 0;
 
   SimpleAudioHandler() {
+    _loggingService.logInfo('Initializing SimpleAudioHandler');
+    
     // Initialize with default values
     _currentSongSubject.add(null);
     _playbackStateSubject.add(PlaybackState(
@@ -47,121 +59,255 @@ class SimpleAudioHandler implements CustomAudioHandler {
     ));
     _queueSubject.add([]);
     
-    _init();
+    // Don't auto-initialize in constructor
+    // Let main.dart call initialize() explicitly
   }
 
   // Expose streams for UI compatibility
+  @override
   ValueStream<MediaItem?> get mediaItem => _currentSongSubject.stream;
 
+  @override
   ValueStream<PlaybackState> get playbackState => _playbackStateSubject.stream;
 
+  @override
   ValueStream<List<MediaItem>> get queue => _queueSubject.stream;
+  
+  @override
+  Stream<String> get errorStream => _errorSubject.stream;
+  
+  @override
+  bool get isInitialized => _isInitialized;
+  
+  @override
+  PlaybackSettings get currentSettings => _settings;
+  
+  @override
+  Duration? get currentPosition => _player.position;
+  
+  @override
+  Duration? get currentDuration => _player.duration;
+
+  /// Public initialize method called from main.dart
+  Future<void> initialize() async {
+    if (_isInitialized || _isDisposed) return;
+    
+    try {
+      _loggingService.logInfo('Starting audio handler initialization');
+      await _init();
+      _loggingService.logInfo('Audio handler initialized successfully');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to initialize audio handler', e, stackTrace);
+      rethrow;
+    }
+  }
 
   Future<void> _init() async {
-    if (_isInitialized) return;
+    if (_isInitialized || _isDisposed) return;
 
-    // Load settings
-    _settings = _storageService.getPlaybackSettings();
+    try {
+      // Load settings
+      _settings = _storageService.getPlaybackSettings();
+      _loggingService.logDebug('Loaded playback settings');
 
-    // Setup audio focus and interrupts
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
+      // Setup audio focus and interrupts
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      _loggingService.logDebug('Configured audio session');
 
-    // Listen to player events and keep playbackState updated
-    _playbackEventSub = _player.playbackEventStream.listen((event) {
-      _broadcastState();
-    });
+      // Setup error handling for player
+      _player.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.error) {
+          _handlePlayerError();
+        }
+      });
 
-    _playerStateSub = _player.playerStateStream.listen((playerState) {
-      _broadcastState();
-    });
+      // Listen to player events and keep playbackState updated
+      _playbackEventSub = _player.playbackEventStream.listen(
+        (event) {
+          try {
+            _broadcastState();
+            _consecutiveErrors = 0; // Reset error count on success
+          } catch (e, stackTrace) {
+            _handleStreamError('playback event', e, stackTrace);
+          }
+        },
+        onError: (e, stackTrace) {
+          _handleStreamError('playback event stream', e, stackTrace);
+        },
+      );
 
-    _positionSub = _player.positionStream.listen((position) {
-      _broadcastState();
-    });
+      _playerStateSub = _player.playerStateStream.listen(
+        (playerState) {
+          try {
+            _broadcastState();
+            if (playerState.processingState == ProcessingState.completed) {
+              _handlePlaybackCompleted();
+            }
+          } catch (e, stackTrace) {
+            _handleStreamError('player state', e, stackTrace);
+          }
+        },
+        onError: (e, stackTrace) {
+          _handleStreamError('player state stream', e, stackTrace);
+        },
+      );
 
-    _durationSub = _player.durationStream.listen((duration) {
-      _broadcastState();
-    });
+      _positionSub = _player.positionStream.listen(
+        (position) {
+          try {
+            _broadcastState();
+          } catch (e, stackTrace) {
+            _handleStreamError('position', e, stackTrace);
+          }
+        },
+        onError: (e, stackTrace) {
+          _handleStreamError('position stream', e, stackTrace);
+        },
+      );
 
-    // When currentIndex changes, update current song
-    _player.currentIndexStream.listen((index) {
-      if (index != null && index < _currentSongs.length) {
-        _currentIndex = index;
-        final song = _currentSongs[index];
-        _currentSongSubject.add(_songToMediaItem(song));
+      _durationSub = _player.durationStream.listen(
+        (duration) {
+          try {
+            _broadcastState();
+          } catch (e, stackTrace) {
+            _handleStreamError('duration', e, stackTrace);
+          }
+        },
+        onError: (e, stackTrace) {
+          _handleStreamError('duration stream', e, stackTrace);
+        },
+      );
 
-        // Update play count and recently played
-        _storageService.updateSongPlayCount(song.id);
-        _storageService.addToRecentlyPlayed(song.id);
-      }
-    });
+      // When currentIndex changes, update current song
+      _player.currentIndexStream.listen(
+        (index) {
+          try {
+            if (index != null && index < _currentSongs.length) {
+              _currentIndex = index;
+              final song = _currentSongs[index];
+              _currentSongSubject.add(_songToMediaItem(song));
 
-    // Handle playback completion
-    _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        _handlePlaybackCompleted();
-      }
-    });
+              // Update play count and recently played asynchronously
+              _updateSongStatistics(song.id);
+            }
+          } catch (e, stackTrace) {
+            _handleStreamError('current index', e, stackTrace);
+          }
+        },
+        onError: (e, stackTrace) {
+          _handleStreamError('current index stream', e, stackTrace);
+        },
+      );
 
-    // Apply settings
-    await _applySettings();
+      // Apply settings
+      await _applySettings();
 
-    // Restore queue if available
-    await _restoreQueue();
+      // Restore queue if available
+      await _restoreQueue();
 
-    _isInitialized = true;
+      _isInitialized = true;
+      _loggingService.logInfo('Audio handler initialization completed');
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during audio handler initialization', e, stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> _applySettings() async {
-    await _player.setShuffleModeEnabled(_settings.shuffleEnabled);
-    await _player.setSpeed(_settings.playbackSpeed);
+    try {
+      await _player.setShuffleModeEnabled(_settings.shuffleEnabled);
+      await _player.setSpeed(_settings.playbackSpeed.clamp(0.25, 3.0));
+      await _player.setVolume(_settings.volume.clamp(0.0, 1.0));
 
-    // Apply repeat mode
-    switch (_settings.repeatMode) {
-      case RepeatMode.none:
-        await _player.setLoopMode(LoopMode.off);
-        break;
-      case RepeatMode.one:
-        await _player.setLoopMode(LoopMode.one);
-        break;
-      case RepeatMode.all:
-        await _player.setLoopMode(LoopMode.all);
-        break;
+      // Apply repeat mode
+      switch (_settings.repeatMode) {
+        case RepeatMode.none:
+          await _player.setLoopMode(LoopMode.off);
+          break;
+        case RepeatMode.one:
+          await _player.setLoopMode(LoopMode.one);
+          break;
+        case RepeatMode.all:
+          await _player.setLoopMode(LoopMode.all);
+          break;
+      }
+      
+      _loggingService.logDebug('Applied settings: shuffle=${_settings.shuffleEnabled}, speed=${_settings.playbackSpeed}, repeat=${_settings.repeatMode}');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to apply settings', e, stackTrace);
+      // Don't rethrow - continue with default settings
     }
   }
 
   Future<void> _restoreQueue() async {
-    final queueItems = _storageService.getQueue();
-    if (queueItems.isNotEmpty) {
-      final songs = _storageService.getSongsByIds(queueItems.map((q) => q.songId).toList());
-      await addQueueItems(songs.map((song) => _songToMediaItem(song)).toList());
+    try {
+      final queueItems = _storageService.getQueue();
+      if (queueItems.isNotEmpty) {
+        _loggingService.logInfo('Restoring queue with ${queueItems.length} items');
+        
+        final songIds = queueItems.map((q) => q.songId).toList();
+        final songs = _storageService.getSongsByIds(songIds);
+        
+        // Validate that songs still exist on disk
+        final validSongs = <Song>[];
+        for (final song in songs) {
+          if (await _validateSongFile(song)) {
+            validSongs.add(song);
+          } else {
+            _loggingService.logWarning('Song file not found, removing from queue: ${song.filePath}');
+          }
+        }
+        
+        if (validSongs.isNotEmpty) {
+          await setQueue(validSongs.map((song) => _songToMediaItem(song)).toList());
+          _loggingService.logInfo('Restored ${validSongs.length} valid songs to queue');
+        } else {
+          _loggingService.logWarning('No valid songs found in saved queue');
+          await _storageService.clearQueue();
+        }
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to restore queue', e, stackTrace);
+      // Clear invalid queue
+      await _storageService.clearQueue();
     }
   }
 
   void _handlePlaybackCompleted() {
-    // Handle repeat modes
-    switch (_settings.repeatMode) {
-      case RepeatMode.none:
-        if (_currentIndex < _currentSongs.length - 1) {
-          // Play next song
-          skipToNext();
-        } else {
-          // Last song, try to add more songs from library
-          _addMoreSongsToQueue();
-        }
-        break;
-      case RepeatMode.one:
-        // Just audio handles this automatically
-        break;
-      case RepeatMode.all:
-        // Just audio handles this automatically
-        break;
+    try {
+      _loggingService.logDebug('Playback completed, handling repeat mode: ${_settings.repeatMode}');
+      
+      // Handle repeat modes
+      switch (_settings.repeatMode) {
+        case RepeatMode.none:
+          if (_currentIndex < _currentSongs.length - 1) {
+            // Play next song
+            skipToNext();
+          } else {
+            // Last song, try to add more songs from library
+            _addMoreSongsToQueue();
+          }
+          break;
+        case RepeatMode.one:
+          // Just audio handles this automatically
+          _loggingService.logDebug('Repeating current song');
+          break;
+        case RepeatMode.all:
+          // Just audio handles this automatically
+          _loggingService.logDebug('Repeating all songs');
+          break;
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error handling playback completion', e, stackTrace);
     }
   }
 
   Future<void> _addMoreSongsToQueue() async {
     try {
+      _loggingService.logDebug('Adding more songs to queue');
+      
       // Get all songs from storage
       final allSongs = _storageService.getAllSongs();
       
@@ -174,22 +320,47 @@ class SimpleAudioHandler implements CustomAudioHandler {
         if (remainingSongs.isNotEmpty) {
           // Add up to 10 more songs to the queue
           final songsToAdd = remainingSongs.take(10).toList();
-          final mediaItems = songsToAdd.map((song) => _songToMediaItem(song)).toList();
-          await addQueueItems(mediaItems);
           
-          // Play the next song
-          skipToNext();
+          // Validate songs before adding
+          final validSongs = <Song>[];
+          for (final song in songsToAdd) {
+            if (await _validateSongFile(song)) {
+              validSongs.add(song);
+            }
+          }
+          
+          if (validSongs.isNotEmpty) {
+            // Add songs to internal list
+            _currentSongs.addAll(validSongs);
+            
+            // Create additional audio sources
+            final additionalSources = validSongs.map((song) => 
+                AudioSource.uri(Uri.file(song.filePath))).toList();
+            await _playlist.addAll(additionalSources);
+            
+            // Update queue subject
+            final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
+            _queueSubject.add(currentMediaItems);
+            
+            // Save queue to storage
+            await _saveQueue();
+            
+            _loggingService.logInfo('Added ${validSongs.length} more songs to queue');
+          } else {
+            _loggingService.logWarning('No valid songs to add to queue');
+            await pause();
+          }
         } else {
-          // No more songs, pause
-          pause();
+          _loggingService.logInfo('No more songs available, pausing');
+          await pause();
         }
       } else {
-        // No more songs available, pause
-        pause();
+        _loggingService.logInfo('All songs already in queue, pausing');
+        await pause();
       }
-    } catch (e) {
-      print('Error adding more songs to queue: $e');
-      pause();
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error adding more songs to queue', e, stackTrace);
+      await pause();
     }
   }
 
@@ -282,13 +453,14 @@ class SimpleAudioHandler implements CustomAudioHandler {
       final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
       _queueSubject.add(currentMediaItems);
       
-      // Create audio sources and set up player
+      // Create audio sources for all songs in the queue
       final sources = _currentSongs.map((song) => AudioSource.uri(Uri.parse(song.filePath))).toList();
       await _playlist.addAll(sources);
+      
+      // Always start from index 0 since we want to play the first song in the queue
       await _player.setAudioSource(_playlist, initialIndex: 0);
       
-      // Set the first song as current
-      _currentIndex = 0;
+      // Set the first song as current - let the player's currentIndexStream handle this
       _currentSongSubject.add(_songToMediaItem(_currentSongs.first));
       
       // Save queue to storage
@@ -353,10 +525,29 @@ class SimpleAudioHandler implements CustomAudioHandler {
   Future<void> seek(Duration position) async => _player.seek(position);
 
   @override
-  Future<void> skipToNext() => _player.seekToNext();
+  Future<void> skipToNext() async {
+    // Check if we have more songs in the queue
+    if (_currentIndex < _currentSongs.length - 1) {
+      final nextIndex = _currentIndex + 1;
+      await _player.seek(Duration.zero, index: nextIndex);
+    } else {
+      // Try to add more songs to the queue
+      await _addMoreSongsToQueue();
+      if (_currentIndex < _currentSongs.length - 1) {
+        final nextIndex = _currentIndex + 1;
+        await _player.seek(Duration.zero, index: nextIndex);
+      }
+    }
+  }
 
   @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async {
+    // Check if we can go to previous song
+    if (_currentIndex > 0) {
+      final prevIndex = _currentIndex - 1;
+      await _player.seek(Duration.zero, index: prevIndex);
+    }
+  }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
@@ -418,10 +609,127 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
   @override
   Future<void> cancelSleepTimer() async {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
-    _settings = _settings.copyWith(sleepTimerEnabled: false);
-    await _storageService.savePlaybackSettings(_settings);
+    try {
+      _sleepTimer?.cancel();
+      _sleepTimer = null;
+      _settings = _settings.copyWith(sleepTimerEnabled: false);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logInfo('Sleep timer cancelled');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error cancelling sleep timer', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  // Additional interface methods implementation
+  @override
+  Future<void> setVolume(double volume) async {
+    try {
+      final clampedVolume = volume.clamp(0.0, 1.0);
+      await _player.setVolume(clampedVolume);
+      _settings = _settings.copyWith(volume: clampedVolume);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Volume set to: $clampedVolume');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting volume', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setEqualizerSettings(Map<String, double> settings) async {
+    try {
+      _settings = _settings.copyWith(equalizerSettings: settings);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Equalizer settings updated');
+      // Note: Actual equalizer implementation would need platform-specific code
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting equalizer', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setCrossfadeDuration(int seconds) async {
+    try {
+      final clampedSeconds = seconds.clamp(0, 30);
+      _settings = _settings.copyWith(crossfadeDuration: clampedSeconds);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Crossfade duration set to: ${clampedSeconds}s');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting crossfade duration', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setGaplessPlayback(bool enabled) async {
+    try {
+      _settings = _settings.copyWith(gaplessPlayback: enabled);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Gapless playback set to: $enabled');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting gapless playback', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setBassBoost(double boost) async {
+    try {
+      final clampedBoost = boost.clamp(0.0, 1.0);
+      _settings = _settings.copyWith(bassBoost: clampedBoost);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Bass boost set to: $clampedBoost');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting bass boost', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setTrebleBoost(double boost) async {
+    try {
+      final clampedBoost = boost.clamp(0.0, 1.0);
+      _settings = _settings.copyWith(trebleBoost: clampedBoost);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Treble boost set to: $clampedBoost');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting treble boost', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> setSkipSilence(bool skip) async {
+    try {
+      _settings = _settings.copyWith(skipSilence: skip);
+      await _storageService.savePlaybackSettings(_settings);
+      _loggingService.logDebug('Skip silence set to: $skip');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error setting skip silence', e, stackTrace);
+      rethrow;
+    }
+  }
+  
+  @override
+  Future<void> recover() async {
+    try {
+      _loggingService.logInfo('Attempting to recover audio handler');
+      
+      // Reset error count
+      _consecutiveErrors = 0;
+      
+      // Try to reinitialize if needed
+      if (!_isInitialized) {
+        await initialize();
+      }
+      
+      _loggingService.logInfo('Audio handler recovery completed');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error during audio handler recovery', e, stackTrace);
+      rethrow;
+    }
   }
 
   // Custom action method for compatibility
@@ -472,17 +780,111 @@ class SimpleAudioHandler implements CustomAudioHandler {
     );
   }
 
+  /// Error handling methods
+  void _handlePlayerError() {
+    _consecutiveErrors++;
+    _loggingService.logError('Player error occurred (${_consecutiveErrors}/${_maxConsecutiveErrors})', null);
+    
+    if (_consecutiveErrors >= _maxConsecutiveErrors) {
+      _loggingService.logFatal('Too many consecutive errors, stopping playback', null);
+      stop();
+    }
+  }
+  
+  void _handleStreamError(String streamName, Object error, StackTrace stackTrace) {
+    _consecutiveErrors++;
+    _loggingService.logError('Stream error in $streamName (${_consecutiveErrors}/${_maxConsecutiveErrors})', error, stackTrace);
+    
+    if (_consecutiveErrors >= _maxConsecutiveErrors) {
+      _loggingService.logFatal('Too many stream errors, reinitializing', error);
+      _reinitialize();
+    }
+  }
+  
+  Future<void> _reinitialize() async {
+    try {
+      _loggingService.logInfo('Reinitializing audio handler due to errors');
+      
+      // Cancel existing subscriptions
+      await _playbackEventSub.cancel();
+      await _playerStateSub.cancel();
+      await _positionSub.cancel();
+      await _durationSub.cancel();
+      
+      // Reset state
+      _isInitialized = false;
+      _consecutiveErrors = 0;
+      
+      // Reinitialize
+      await _init();
+    } catch (e, stackTrace) {
+      _loggingService.logFatal('Failed to reinitialize audio handler', e, stackTrace);
+    }
+  }
+  
+  Future<bool> _validateSongFile(Song song) async {
+    try {
+      final file = File(song.filePath);
+      final exists = await file.exists();
+      if (!exists) {
+        _loggingService.logWarning('Song file does not exist: ${song.filePath}');
+        return false;
+      }
+      
+      final size = await file.length();
+      if (size == 0) {
+        _loggingService.logWarning('Song file is empty: ${song.filePath}');
+        return false;
+      }
+      
+      return true;
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error validating song file: ${song.filePath}', e, stackTrace);
+      return false;
+    }
+  }
+  
+  Future<void> _updateSongStatistics(String songId) async {
+    try {
+      await _storageService.updateSongPlayCount(songId);
+      await _storageService.addToRecentlyPlayed(songId);
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to update song statistics: $songId', e, stackTrace);
+      // Don't rethrow - this is not critical
+    }
+  }
+
   @override
   Future<void> dispose() async {
-    _sleepTimer?.cancel();
-    await _playbackEventSub.cancel();
-    await _playerStateSub.cancel();
-    await _positionSub.cancel();
-    await _durationSub.cancel();
-    await _player.dispose();
-    await _saveQueue();
-    await _currentSongSubject.close();
-    await _playbackStateSubject.close();
-    await _queueSubject.close();
+    if (_isDisposed) return;
+    
+    try {
+      _loggingService.logInfo('Disposing audio handler');
+      _isDisposed = true;
+      
+      // Cancel sleep timer
+      _sleepTimer?.cancel();
+      
+      // Cancel stream subscriptions
+      await _playbackEventSub.cancel();
+      await _playerStateSub.cancel();
+      await _positionSub.cancel();
+      await _durationSub.cancel();
+      
+      // Save current queue
+      await _saveQueue();
+      
+      // Dispose player
+      await _player.dispose();
+      
+      // Close subjects
+      await _currentSongSubject.close();
+      await _playbackStateSubject.close();
+      await _queueSubject.close();
+      
+      _loggingService.logInfo('Audio handler disposed successfully');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error disposing audio handler', e, stackTrace);
+    }
   }
 }

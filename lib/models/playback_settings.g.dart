@@ -27,13 +27,22 @@ class PlaybackSettingsAdapter extends TypeAdapter<PlaybackSettings> {
       sleepTimerDuration: fields[7] as int,
       resumeAfterReboot: fields[8] as bool,
       equalizerSettings: (fields[9] as Map).cast<String, double>(),
+      skipSilence: fields[10] as bool,
+      bassBoost: fields[11] as double,
+      trebleBoost: fields[12] as double,
+      autoPlay: fields[13] as bool,
+      showNotifications: fields[14] as bool,
+      audioQuality: fields[15] as String,
+      fadeInOut: fields[16] as bool,
+      fadeInDuration: fields[17] as int,
+      fadeOutDuration: fields[18] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, PlaybackSettings obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.shuffleEnabled)
       ..writeByte(1)
@@ -53,7 +62,25 @@ class PlaybackSettingsAdapter extends TypeAdapter<PlaybackSettings> {
       ..writeByte(8)
       ..write(obj.resumeAfterReboot)
       ..writeByte(9)
-      ..write(obj.equalizerSettings);
+      ..write(obj.equalizerSettings)
+      ..writeByte(10)
+      ..write(obj.skipSilence)
+      ..writeByte(11)
+      ..write(obj.bassBoost)
+      ..writeByte(12)
+      ..write(obj.trebleBoost)
+      ..writeByte(13)
+      ..write(obj.autoPlay)
+      ..writeByte(14)
+      ..write(obj.showNotifications)
+      ..writeByte(15)
+      ..write(obj.audioQuality)
+      ..writeByte(16)
+      ..write(obj.fadeInOut)
+      ..writeByte(17)
+      ..write(obj.fadeInDuration)
+      ..writeByte(18)
+      ..write(obj.fadeOutDuration);
   }
 
   @override

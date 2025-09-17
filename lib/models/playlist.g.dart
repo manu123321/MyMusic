@@ -25,13 +25,16 @@ class PlaylistAdapter extends TypeAdapter<Playlist> {
       dateModified: fields[5] as DateTime,
       coverArtPath: fields[6] as String?,
       isSystemPlaylist: fields[7] as bool,
+      sortOrder: fields[8] as int,
+      isPublic: fields[9] as bool,
+      colorTheme: fields[10] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Playlist obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +50,13 @@ class PlaylistAdapter extends TypeAdapter<Playlist> {
       ..writeByte(6)
       ..write(obj.coverArtPath)
       ..writeByte(7)
-      ..write(obj.isSystemPlaylist);
+      ..write(obj.isSystemPlaylist)
+      ..writeByte(8)
+      ..write(obj.sortOrder)
+      ..writeByte(9)
+      ..write(obj.isPublic)
+      ..writeByte(10)
+      ..write(obj.colorTheme);
   }
 
   @override
