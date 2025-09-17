@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   bool _showEqualizer = false;
   bool _isDraggingSlider = false;
   Duration _sliderPosition = Duration.zero;
+  bool _isProcessingPlayPause = false;
+  Timer? _processingResetTimer;
 
   @override
   void initState() {
@@ -75,6 +78,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _albumArtController.dispose();
     _progressController.dispose();
     _slideController.dispose();
+    _processingResetTimer?.cancel();
     super.dispose();
   }
   
@@ -155,7 +159,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       key: const ValueKey('now_playing_screen'),
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
-      body: Container(
+      body: GestureDetector(
+        onTap: () {}, // Absorb taps to prevent gesture conflicts
+        onPanDown: (_) {}, // Absorb pan gestures
+        onLongPress: () {}, // Absorb long press gestures
+        behavior: HitTestBehavior.opaque, // CRITICAL: Block all gestures from reaching underlying widgets
+        child: Container(
         decoration: _buildBackgroundGradient(currentSong),
         child: SafeArea(
           child: SlideTransition(
@@ -527,21 +536,53 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
                           builder: (context, snapshot) {
                             final isPlaying = snapshot.data ?? false;
-                            return GestureDetector(
-                              onTap: () {
-                                HapticFeedback.mediumImpact();
-                                if (isPlaying) {
-                                  audioHandler.pause();
-                                } else {
-                                  audioHandler.play();
-                                }
-                              },
-                              child: Container(
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(40),
+                                onTap: () async {
+                                  if (_isProcessingPlayPause) return; // Prevent double-taps
+                                  
+                                  setState(() {
+                                    _isProcessingPlayPause = true;
+                                  });
+                                  
+                                  // Failsafe timer to reset processing state
+                                  _processingResetTimer?.cancel();
+                                  _processingResetTimer = Timer(const Duration(seconds: 2), () {
+                                    if (mounted) {
+                                      setState(() {
+                                        _isProcessingPlayPause = false;
+                                      });
+                                    }
+                                  });
+                                  
+                                  try {
+                                    HapticFeedback.mediumImpact();
+                                    if (isPlaying) {
+                                      await audioHandler.pause();
+                                    } else {
+                                      await audioHandler.play();
+                                    }
+                                  } catch (e) {
+                                    // Handle any errors
+                                    _loggingService.logError('Error in play/pause', e);
+                                  } finally {
+                                    // CRITICAL FIX: Reset immediately and cancel failsafe timer
+                                    _processingResetTimer?.cancel();
+                                    if (mounted) {
+                                      setState(() {
+                                        _isProcessingPlayPause = false;
+                                      });
+                                    }
+                                  }
+                                },
+                                child: Container(
                                 width: 80,
                                 height: 80,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.white,
+                                  color: _isProcessingPlayPause ? Colors.grey[300] : Colors.white,
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(alpha: 0.3),
@@ -560,12 +601,22 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                       child: child,
                                     );
                                   },
-                                  child: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
-                                    key: ValueKey(isPlaying),
-                                    color: Colors.black,
-                                    size: 40,
-                                  ),
+                                  child: _isProcessingPlayPause
+                                      ? const SizedBox(
+                                          width: 40,
+                                          height: 40,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 3,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                          ),
+                                        )
+                                      : Icon(
+                                          isPlaying ? Icons.pause : Icons.play_arrow,
+                                          key: ValueKey(isPlaying),
+                                          color: Colors.black,
+                                          size: 40,
+                                        ),
+                                ),
                                 ),
                               ),
                             );
@@ -611,6 +662,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               ],
             ),
           ),
+        ),
         ),
       ),
     );
