@@ -267,7 +267,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
 
-      _loggingService.logInfo('Setting queue with ${items.length} items - CIRCULAR NAVIGATION MODE');
+      _loggingService.logInfo('Setting queue with ${items.length} items - CIRCULAR NAVIGATION (HOME SCREEN ORDER)');
       
       // Stop current playback
       await _player.stop();
@@ -314,10 +314,10 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
     }
   }
 
-  /// Builds a circular queue with ALL songs in alphabetical order
+  /// Builds a circular queue with ALL songs in the EXACT SAME ORDER as home screen
   Future<void> _buildCircularQueue(MediaItem selectedItem) async {
     try {
-      // Get ALL songs from storage
+      // Get ALL songs from storage in the EXACT SAME ORDER as home screen
       final allSongs = _storageService.getAllSongs();
       
       if (allSongs.isEmpty) {
@@ -325,13 +325,13 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
       
-      // Sort ALL songs alphabetically by title (a→b→c→...→z)
-      final sortedSongs = List<Song>.from(allSongs);
-      sortedSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      // CRITICAL: Use the EXACT SAME ORDER as home screen (storage order)
+      // NO SORTING - keep the natural order that users see on home screen
+      final songsInDisplayOrder = List<Song>.from(allSongs);
       
-      // Validate and add all songs
+      // Validate and add all songs in display order
       final validSongs = <Song>[];
-      for (final song in sortedSongs) {
+      for (final song in songsInDisplayOrder) {
         if (await _validateSongFile(song)) {
           validSongs.add(song);
         }
@@ -339,7 +339,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       
       _queue.addAll(validSongs);
       
-      _loggingService.logInfo('Built circular queue with ${_queue.length} songs in alphabetical order');
+      _loggingService.logInfo('Built circular queue with ${_queue.length} songs in HOME SCREEN ORDER (no sorting)');
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error building circular queue', e, stackTrace);
@@ -469,7 +469,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
       
-      // CIRCULAR NAVIGATION: Forward (a→b→c→...→z→a→b→...)
+      // CIRCULAR NAVIGATION: Forward (follows home screen order)
       final nextIndex = (_currentIndex + 1) % _queue.length; // Circular wrap-around
       
       _loggingService.logInfo('CIRCULAR FORWARD: ${_queue[_currentIndex].title} → ${_queue[nextIndex].title} ($_currentIndex → $nextIndex)');
@@ -490,7 +490,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
         return;
       }
       
-      // CIRCULAR NAVIGATION: Backward (z→y→x→...→b→a→z→y→...)
+      // CIRCULAR NAVIGATION: Backward (follows reverse home screen order)
       final prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length; // Circular wrap-around
       
       _loggingService.logInfo('CIRCULAR BACKWARD: ${_queue[_currentIndex].title} → ${_queue[prevIndex].title} ($_currentIndex → $prevIndex)');
