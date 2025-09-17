@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -31,8 +30,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   bool _showEqualizer = false;
   bool _isDraggingSlider = false;
   Duration _sliderPosition = Duration.zero;
-  bool _isProcessingPlayPause = false;
-  Timer? _processingResetTimer;
 
   @override
   void initState() {
@@ -78,7 +75,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _albumArtController.dispose();
     _progressController.dispose();
     _slideController.dispose();
-    _processingResetTimer?.cancel();
     super.dispose();
   }
   
@@ -542,83 +538,33 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(40),
-                                onTap: () async {
-                                  if (_isProcessingPlayPause) return; // Prevent double-taps
-                                  
-                                  setState(() {
-                                    _isProcessingPlayPause = true;
-                                  });
-                                  
-                                  // Failsafe timer to reset processing state
-                                  _processingResetTimer?.cancel();
-                                  _processingResetTimer = Timer(const Duration(seconds: 2), () {
-                                    if (mounted) {
-                                      setState(() {
-                                        _isProcessingPlayPause = false;
-                                      });
-                                    }
-                                  });
-                                  
-                                  try {
-                                    HapticFeedback.mediumImpact();
-                                    if (isPlaying) {
-                                      await audioHandler.pause();
-                                    } else {
-                                      await audioHandler.play();
-                                    }
-                                  } catch (e) {
-                                    // Handle any errors
-                                    _loggingService.logError('Error in play/pause', e);
-                                  } finally {
-                                    // CRITICAL FIX: Reset immediately and cancel failsafe timer
-                                    _processingResetTimer?.cancel();
-                                    if (mounted) {
-                                      setState(() {
-                                        _isProcessingPlayPause = false;
-                                      });
-                                    }
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  if (isPlaying) {
+                                    audioHandler.pause();
+                                  } else {
+                                    audioHandler.play();
                                   }
                                 },
                                 child: Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _isProcessingPlayPause ? Colors.grey[300] : Colors.white,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 150),
-                                  switchInCurve: Curves.easeInOut,
-                                  switchOutCurve: Curves.easeInOut,
-                                  transitionBuilder: (child, animation) {
-                                    return ScaleTransition(
-                                      scale: animation,
-                                      child: child,
-                                    );
-                                  },
-                                  child: _isProcessingPlayPause
-                                      ? const SizedBox(
-                                          width: 40,
-                                          height: 40,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 3,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                          ),
-                                        )
-                                      : Icon(
-                                          isPlaying ? Icons.pause : Icons.play_arrow,
-                                          key: ValueKey(isPlaying),
-                                          color: Colors.black,
-                                          size: 40,
-                                        ),
-                                ),
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 20,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                                    color: Colors.black,
+                                    size: 40,
+                                  ),
                                 ),
                               ),
                             );
