@@ -212,12 +212,14 @@ class SimpleAudioHandler implements CustomAudioHandler {
           try {
             _loggingService.logDebug('Current index changed to: $index');
             
-            if (index != null && index < _currentSongs.length) {
+            if (index != null && index < _currentSongs.length && index != _currentIndex) {
+              // Only update if index actually changed
+              final previousIndex = _currentIndex;
               _currentIndex = index;
               final song = _currentSongs[index];
               final mediaItem = _songToMediaItem(song);
               
-              _loggingService.logInfo('Now playing: ${song.title} (index: $index)');
+              _loggingService.logInfo('Track changed from index $previousIndex to $index: ${song.title}');
               
               // Update current song
               _currentSongSubject.add(mediaItem);
@@ -232,8 +234,13 @@ class SimpleAudioHandler implements CustomAudioHandler {
               // Update play count and recently played asynchronously
               _updateSongStatistics(song.id);
             } else if (index == null) {
+              _loggingService.logDebug('Current index is null, clearing current song');
               _currentSongSubject.add(null);
               _broadcastState();
+            } else if (index == _currentIndex) {
+              _loggingService.logDebug('Index unchanged: $index');
+            } else {
+              _loggingService.logWarning('Invalid index: $index (queue length: ${_currentSongs.length})');
             }
           } catch (e, stackTrace) {
             _handleStreamError('current index', e, stackTrace);
@@ -321,26 +328,27 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
   void _handlePlaybackCompleted() {
     try {
-      _loggingService.logDebug('Playback completed, handling repeat mode: ${_settings.repeatMode}');
+      _loggingService.logDebug('Playback completed, current index: $_currentIndex, queue length: ${_currentSongs.length}, repeat mode: ${_settings.repeatMode}');
       
       // Handle repeat modes
       switch (_settings.repeatMode) {
         case RepeatMode.none:
-          if (_currentIndex < _currentSongs.length - 1) {
-            // Play next song
-            skipToNext();
-          } else {
-            // Last song, try to add more songs from library
+          // For RepeatMode.none, just_audio will automatically advance to next song
+          // We only need to handle the case when we reach the end of the queue
+          if (_currentIndex >= _currentSongs.length - 1) {
+            _loggingService.logInfo('Reached end of queue, trying to add more songs');
             _addMoreSongsToQueue();
+          } else {
+            _loggingService.logInfo('Song completed, just_audio will handle advancement');
           }
           break;
         case RepeatMode.one:
-          // Just audio handles this automatically
-          _loggingService.logDebug('Repeating current song');
+          // Just audio handles this automatically with LoopMode.one
+          _loggingService.logDebug('Repeating current song (handled by just_audio)');
           break;
         case RepeatMode.all:
-          // Just audio handles this automatically
-          _loggingService.logDebug('Repeating all songs');
+          // Just audio handles this automatically with LoopMode.all
+          _loggingService.logDebug('Repeating all songs (handled by just_audio)');
           break;
       }
     } catch (e, stackTrace) {
@@ -410,21 +418,55 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
   Future<void> _addMoreSongsToQueueForSingleSong() async {
     try {
+      _loggingService.logInfo('Adding more songs to queue for continuous playback');
+      
       // Get all songs from storage
       final allSongs = _storageService.getAllSongs();
       
-      // Get songs that are not the currently selected song
-      final currentSongId = _currentSongs.first.id;
-      final remainingSongs = allSongs.where((s) => s.id != currentSongId).toList();
+      if (allSongs.isEmpty) {
+        _loggingService.logWarning('No songs available to add to queue');
+        return;
+      }
+      
+      // Get songs that are not already in the current queue
+      final currentSongIds = _currentSongs.map((s) => s.id).toSet();
+      final remainingSongs = allSongs.where((s) => !currentSongIds.contains(s.id)).toList();
       
       if (remainingSongs.isNotEmpty) {
         // Add up to 20 more songs to the queue for continuous playback
         final songsToAdd = remainingSongs.take(20).toList();
-        _currentSongs.addAll(songsToAdd);
+        
+        // Validate songs before adding
+        final validSongs = <Song>[];
+        for (final song in songsToAdd) {
+          if (await _validateSongFile(song)) {
+            validSongs.add(song);
+          }
+        }
+        
+        if (validSongs.isNotEmpty) {
+          // Add songs to internal list
+          _currentSongs.addAll(validSongs);
+          
+          // Create additional audio sources
+          final additionalSources = validSongs.map((song) => 
+              AudioSource.uri(Uri.file(song.filePath))).toList();
+          await _playlist.addAll(additionalSources);
+          
+          // Update queue subject
+          final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
+          _queueSubject.add(currentMediaItems);
+          
+          _loggingService.logInfo('Added ${validSongs.length} more songs to queue for continuous playback');
+        } else {
+          _loggingService.logWarning('No valid songs found to add to queue');
+        }
+      } else {
+        _loggingService.logInfo('No more songs available to add to queue');
       }
-      } catch (e, stackTrace) {
-        _loggingService.logError('Error adding more songs to queue for single song', e, stackTrace);
-      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error adding more songs to queue for single song', e, stackTrace);
+    }
   }
 
   MediaItem _songToMediaItem(Song song) {
@@ -500,11 +542,15 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
       // Convert MediaItems to Songs and add to internal list
       final songs = items.map((item) => _mediaItemToSong(item)).toList();
+      final selectedSong = songs.first; // Remember the selected song
       _currentSongs.addAll(songs);
       
-      // If only one song is selected, add more songs from library for continuous playback
+      // CRITICAL FIX: Add more songs but keep selected song at index 0
       if (items.length == 1) {
         await _addMoreSongsToQueueForSingleSong();
+        // Move selected song to front of queue after adding more songs
+        _currentSongs.removeWhere((s) => s.id == selectedSong.id);
+        _currentSongs.insert(0, selectedSong);
       }
       
       // Create audio sources for all songs in the queue
@@ -512,8 +558,9 @@ class SimpleAudioHandler implements CustomAudioHandler {
           AudioSource.uri(Uri.file(song.filePath))).toList();
       await _playlist.addAll(sources);
       
-      // Set the audio source and start from index 0
+      // Set the audio source and start from index 0 (which is now the selected song)
       await _player.setAudioSource(_playlist, initialIndex: 0);
+      _currentIndex = 0; // This will now play the selected song
       
       // Update queue and current song
       final currentMediaItems = _currentSongs.map((song) => _songToMediaItem(song)).toList();
@@ -522,7 +569,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
       if (_currentSongs.isNotEmpty) {
         final firstSong = _currentSongs.first;
         _currentSongSubject.add(_songToMediaItem(firstSong));
-        _loggingService.logInfo('Queue set, first song: ${firstSong.title}');
+        _loggingService.logInfo('Queue set with ${_currentSongs.length} songs, first song: ${firstSong.title}');
       }
       
       // Broadcast initial state

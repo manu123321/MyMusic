@@ -215,7 +215,7 @@ class SongsNotifier extends StateNotifier<List<Song>> {
         return false;
       }
       
-      await _storageService.deleteSong(songId);
+    await _storageService.deleteSong(songId);
       
       // Update cache and state efficiently
       _songCache.remove(songId);
@@ -249,14 +249,14 @@ class SongsNotifier extends StateNotifier<List<Song>> {
 
   List<Song> getRecentlyPlayed({int limit = 50}) {
     try {
-      final recentlyPlayedPlaylist = _storageService.getPlaylist('recently_played');
-      if (recentlyPlayedPlaylist != null) {
+    final recentlyPlayedPlaylist = _storageService.getPlaylist('recently_played');
+    if (recentlyPlayedPlaylist != null) {
         final songIds = recentlyPlayedPlaylist.songIds.take(limit).toList();
         final songs = _storageService.getSongsByIds(songIds);
         _loggingService.logDebug('Retrieved ${songs.length} recently played songs');
         return songs;
-      }
-      return [];
+    }
+    return [];
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to get recently played songs', e, stackTrace);
       return [];
@@ -265,8 +265,8 @@ class SongsNotifier extends StateNotifier<List<Song>> {
 
   List<Song> getMostPlayed({int limit = 50}) {
     try {
-      final mostPlayedPlaylist = _storageService.getPlaylist('most_played');
-      if (mostPlayedPlaylist != null) {
+    final mostPlayedPlaylist = _storageService.getPlaylist('most_played');
+    if (mostPlayedPlaylist != null) {
         final songIds = mostPlayedPlaylist.songIds.take(limit).toList();
         final songs = _storageService.getSongsByIds(songIds);
         _loggingService.logDebug('Retrieved ${songs.length} most played songs');
@@ -286,9 +286,9 @@ class SongsNotifier extends StateNotifier<List<Song>> {
       return favorites;
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to get favorite songs', e, stackTrace);
-      return [];
-    }
+    return [];
   }
+}
 
   Song? getSongById(String songId) {
     try {
@@ -431,15 +431,15 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
         throw ArgumentError('A playlist with this name already exists');
       }
       
-      final playlist = Playlist.create(
-        name: name,
-        description: description,
-        coverArtPath: coverArtPath,
+    final playlist = Playlist.create(
+      name: name,
+      description: description,
+      coverArtPath: coverArtPath,
         colorTheme: colorTheme,
         isPublic: isPublic,
-      );
+    );
       
-      await _storageService.savePlaylist(playlist);
+    await _storageService.savePlaylist(playlist);
       
       // Update cache and state
       _playlistCache[playlist.id] = playlist;
@@ -461,7 +461,7 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
         throw ArgumentError('Playlist name cannot be empty');
       }
       
-      await _storageService.savePlaylist(playlist);
+    await _storageService.savePlaylist(playlist);
       
       // Update cache and state
       _playlistCache[playlist.id] = playlist;
@@ -495,7 +495,7 @@ class PlaylistsNotifier extends StateNotifier<List<Playlist>> {
          throw ArgumentError('Cannot delete system playlists');
        }
       
-      await _storageService.deletePlaylist(playlistId);
+    await _storageService.deletePlaylist(playlistId);
       
       // Update cache and state
       _playlistCache.remove(playlistId);
@@ -704,8 +704,8 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         throw ArgumentError('Invalid playback settings');
       }
       
-      await _storageService.savePlaybackSettings(settings);
-      state = settings;
+    await _storageService.savePlaybackSettings(settings);
+    state = settings;
       
       _loggingService.logInfo('Updated playback settings');
       return true;
@@ -719,7 +719,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 
   Future<bool> setShuffleEnabled(bool enabled) async {
     try {
-      final newSettings = state.copyWith(shuffleEnabled: enabled);
+    final newSettings = state.copyWith(shuffleEnabled: enabled);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Shuffle ${enabled ? 'enabled' : 'disabled'}');
@@ -733,7 +733,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 
   Future<bool> setRepeatMode(RepeatMode mode) async {
     try {
-      final newSettings = state.copyWith(repeatMode: mode);
+    final newSettings = state.copyWith(repeatMode: mode);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Repeat mode set to: $mode');
@@ -751,7 +751,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         throw ArgumentError('Playback speed must be between 0.25 and 3.0');
       }
       
-      final newSettings = state.copyWith(playbackSpeed: speed);
+    final newSettings = state.copyWith(playbackSpeed: speed);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Playback speed set to: ${speed}x');
@@ -769,7 +769,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         throw ArgumentError('Crossfade duration must be between 0 and 30 seconds');
       }
       
-      final newSettings = state.copyWith(crossfadeDuration: seconds);
+    final newSettings = state.copyWith(crossfadeDuration: seconds);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Crossfade duration set to: ${seconds}s');
@@ -783,7 +783,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 
   Future<bool> setGaplessPlayback(bool enabled) async {
     try {
-      final newSettings = state.copyWith(gaplessPlayback: enabled);
+    final newSettings = state.copyWith(gaplessPlayback: enabled);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Gapless playback ${enabled ? 'enabled' : 'disabled'}');
@@ -801,7 +801,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         throw ArgumentError('Volume must be between 0.0 and 1.0');
       }
       
-      final newSettings = state.copyWith(volume: volume);
+    final newSettings = state.copyWith(volume: volume);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logDebug('Volume set to: ${(volume * 100).toInt()}%');
@@ -815,7 +815,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 
   Future<bool> setSleepTimerEnabled(bool enabled) async {
     try {
-      final newSettings = state.copyWith(sleepTimerEnabled: enabled);
+    final newSettings = state.copyWith(sleepTimerEnabled: enabled);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Sleep timer ${enabled ? 'enabled' : 'disabled'}');
@@ -833,7 +833,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         throw ArgumentError('Sleep timer duration must be between 1 and 999 minutes');
       }
       
-      final newSettings = state.copyWith(sleepTimerDuration: minutes);
+    final newSettings = state.copyWith(sleepTimerDuration: minutes);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Sleep timer duration set to: ${minutes} minutes');
@@ -847,7 +847,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 
   Future<bool> setResumeAfterReboot(bool enabled) async {
     try {
-      final newSettings = state.copyWith(resumeAfterReboot: enabled);
+    final newSettings = state.copyWith(resumeAfterReboot: enabled);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Resume after reboot ${enabled ? 'enabled' : 'disabled'}');
@@ -868,7 +868,7 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
         }
       }
       
-      final newSettings = state.copyWith(equalizerSettings: settings);
+    final newSettings = state.copyWith(equalizerSettings: settings);
       final success = await updateSettings(newSettings);
       if (success) {
         _loggingService.logInfo('Equalizer settings updated');
@@ -900,8 +900,8 @@ class PlaybackSettingsNotifier extends StateNotifier<PlaybackSettings> {
 // Current playing song
 final currentSongProvider = StreamProvider<MediaItem?>((ref) {
   try {
-    final audioHandler = ref.read(audioHandlerProvider);
-    return audioHandler.mediaItem;
+  final audioHandler = ref.read(audioHandlerProvider);
+  return audioHandler.mediaItem;
   } catch (e) {
     ref.read(loggingServiceProvider).logError('Failed to get current song stream', e);
     return Stream.value(null);
@@ -911,8 +911,8 @@ final currentSongProvider = StreamProvider<MediaItem?>((ref) {
 // Playback state
 final playbackStateProvider = StreamProvider<PlaybackState>((ref) {
   try {
-    final audioHandler = ref.read(audioHandlerProvider);
-    return audioHandler.playbackState;
+  final audioHandler = ref.read(audioHandlerProvider);
+  return audioHandler.playbackState;
   } catch (e) {
     ref.read(loggingServiceProvider).logError('Failed to get playback state stream', e);
     return Stream.value(PlaybackState());
@@ -922,8 +922,8 @@ final playbackStateProvider = StreamProvider<PlaybackState>((ref) {
 // Queue
 final queueProvider = StreamProvider<List<MediaItem>>((ref) {
   try {
-    final audioHandler = ref.read(audioHandlerProvider);
-    return audioHandler.queue;
+  final audioHandler = ref.read(audioHandlerProvider);
+  return audioHandler.queue;
   } catch (e) {
     ref.read(loggingServiceProvider).logError('Failed to get queue stream', e);
     return Stream.value([]);
