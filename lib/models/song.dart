@@ -120,10 +120,10 @@ class Song extends HiveObject {
       }
       
       // Validate numeric fields
-      final duration = _parseIntSafely(map['duration'], 0);
-      final playCount = _parseIntSafely(map['playCount'], 0);
-      final fileSize = _parseIntSafely(map['fileSize'], 0);
-      final bitrate = _parseIntSafely(map['bitrate'], 0);
+      final duration = _parseIntSafely(map['duration'], 0) ?? 0;
+      final playCount = _parseIntSafely(map['playCount'], 0) ?? 0;
+      final fileSize = _parseIntSafely(map['fileSize'], 0) ?? 0;
+      final bitrate = _parseIntSafely(map['bitrate'], 0) ?? 0;
       
       if (duration < 0) throw ArgumentError('Duration must be non-negative');
       if (playCount < 0) throw ArgumentError('Play count must be non-negative');
@@ -141,7 +141,7 @@ class Song extends HiveObject {
         id: map['id'] ?? const Uuid().v4(),
         title: title,
         artist: artist,
-        album: album.isEmpty ? 'Unknown Album' : album,
+        album: (album?.isEmpty ?? true) ? 'Unknown Album' : album!,
         filePath: filePath,
         duration: duration,
         albumArtPath: map['albumArtPath'],
@@ -325,7 +325,7 @@ class Song extends HiveObject {
   
   @override
   String toString() {
-    return 'Song(id: $id, title: $title, artist: $artist, album: $album, duration: ${formattedDuration})';
+    return 'Song(id: $id, title: $title, artist: $artist, album: $album, duration: $formattedDuration)';
   }
 
   @override
