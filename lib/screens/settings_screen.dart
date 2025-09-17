@@ -1,13 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:share_plus/share_plus.dart';
 import '../providers/music_provider.dart';
 import '../models/playback_settings.dart';
-import '../models/song.dart';
-import '../models/playlist.dart';
-import '../services/storage_service.dart';
 import '../services/logging_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -208,7 +205,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: Colors.green,
+        activeThumbColor: Colors.green,
       ),
     );
   }
@@ -413,9 +410,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       
       final storageService = ref.read(storageServiceProvider);
       final exportData = await storageService.exportData();
-      
-      // Save to file
-      final fileName = 'music_player_backup_${DateTime.now().millisecondsSinceEpoch}.json';
       
       // For now, just copy to clipboard (you can enhance this to save to file)
       await Clipboard.setData(ClipboardData(text: exportData));
