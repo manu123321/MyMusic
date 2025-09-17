@@ -10,6 +10,7 @@ import '../models/queue_item.dart';
 import 'storage_service.dart';
 import 'custom_audio_handler.dart';
 import 'logging_service.dart';
+import 'media_session_manager.dart';
 
 /// Professional audio handler with reliable song selection and playback
 class ProfessionalAudioHandler implements CustomAudioHandler {
@@ -20,6 +21,7 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
   // Services
   final StorageService _storageService = StorageService();
   final LoggingService _loggingService = LoggingService();
+  final MediaSessionManager _mediaSessionManager = MediaSessionManager();
   
   // State management
   PlaybackSettings _settings = PlaybackSettings();
@@ -199,6 +201,9 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       // Update media item
       final mediaItem = _songToMediaItem(_currentSong!);
       _mediaItemSubject.add(mediaItem);
+      
+      // Update media session for lock screen display
+      _mediaSessionManager.updateMediaMetadata(_currentSong!);
       
       // Update playback state
       _updatePlaybackState();
@@ -547,6 +552,9 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
+          MediaAction.setRating,
+          MediaAction.setRepeatMode,
+          MediaAction.setShuffleMode,
         },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: _mapProcessingState(processingState),
@@ -562,6 +570,19 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
       );
 
       _playbackStateSubject.add(newState);
+      
+      // Update media session manager with current state
+      if (_currentSong != null) {
+        _mediaSessionManager.updatePlaybackState(
+          playing: playing,
+          position: position,
+          duration: _player.duration,
+          speed: speed,
+          shuffleEnabled: _settings.shuffleEnabled,
+          repeatMode: _mapRepeatMode(_settings.repeatMode),
+          processingState: _mapProcessingState(processingState),
+        );
+      }
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error updating playback state', e, stackTrace);
@@ -902,6 +923,58 @@ class ProfessionalAudioHandler implements CustomAudioHandler {
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     _loggingService.logDebug('Custom action: $name');
+    
+    // Handle media button actions from hardware controls
+    switch (name) {
+      case 'MEDIA_BUTTON_PLAY':
+        await play();
+        break;
+      case 'MEDIA_BUTTON_PAUSE':
+        await pause();
+        break;
+      case 'MEDIA_BUTTON_PLAY_PAUSE':
+        if (_player.playing) {
+          await pause();
+        } else {
+          await play();
+        }
+        break;
+      case 'MEDIA_BUTTON_NEXT':
+        await skipToNext();
+        break;
+      case 'MEDIA_BUTTON_PREVIOUS':
+        await skipToPrevious();
+        break;
+      case 'MEDIA_BUTTON_STOP':
+        await stop();
+        break;
+      case 'SET_FAVORITE':
+        if (_currentSong != null && extras != null) {
+          final isFavorite = extras['isFavorite'] as bool? ?? false;
+          await _toggleFavorite(_currentSong!.id, isFavorite);
+        }
+        break;
+      default:
+        _loggingService.logWarning('Unknown custom action: $name');
+    }
+  }
+  
+  Future<void> _toggleFavorite(String songId, bool isFavorite) async {
+    try {
+      // Note: toggleSongFavorite method needs to be implemented in StorageService
+      // For now, we'll just log the action
+      _loggingService.logInfo('Song favorite toggled: $songId = $isFavorite');
+      
+      // Update current song if it's the one being toggled
+      if (_currentSong?.id == songId) {
+        _currentSong = _currentSong!.copyWith(isFavorite: isFavorite);
+        final mediaItem = _songToMediaItem(_currentSong!);
+        _mediaItemSubject.add(mediaItem);
+        _mediaSessionManager.updateMediaMetadata(_currentSong!);
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error toggling favorite', e, stackTrace);
+    }
   }
 
   @override

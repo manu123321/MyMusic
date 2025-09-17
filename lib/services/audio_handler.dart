@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import '../models/song.dart';
 import '../models/playback_settings.dart';
 import '../models/queue_item.dart';
@@ -14,15 +12,20 @@ import 'storage_service.dart';
 Future<AudioHandler> initAudioHandler() async {
   return await AudioService.init(
     builder: () => MusicPlayerAudioHandler(),
-    config: const AudioServiceConfig(
+    config: AudioServiceConfig(
       androidNotificationChannelId: 'com.music_player.channel.audio',
-      androidNotificationChannelName: 'Music Playback',
-      androidNotificationOngoing: true,
+      androidNotificationChannelName: 'Music Player',
+      androidNotificationChannelDescription: 'Media playback controls for Music Player',
+      androidNotificationOngoing: false,
       androidShowNotificationBadge: true,
       androidNotificationIcon: 'drawable/ic_notification',
+      androidNotificationClickStartsActivity: true,
+      androidStopForegroundOnPause: false,
       preloadArtwork: true,
       artDownscaleWidth: 512,
       artDownscaleHeight: 512,
+      fastForwardInterval: Duration(seconds: 10),
+      rewindInterval: Duration(seconds: 10),
     ),
   );
 }
@@ -122,9 +125,13 @@ class MusicPlayerAudioHandler extends BaseAudioHandler
       try {
         // Note: Crossfade is not directly supported in just_audio
         // This would need to be implemented at a higher level
-        print('Crossfade setting: ${_settings.crossfadeDuration}s (not implemented)');
+        if (kDebugMode) {
+          print('Crossfade setting: ${_settings.crossfadeDuration}s (not implemented)');
+        }
       } catch (e) {
-        print('Crossfade not supported: $e');
+        if (kDebugMode) {
+          print('Crossfade not supported: $e');
+        }
       }
     }
   }
@@ -173,12 +180,12 @@ class MusicPlayerAudioHandler extends BaseAudioHandler
   }
 
   @override
-  Future<void> addQueueItems(List<MediaItem> items) async {
+  Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     final current = queue.value;
-    final newQueue = [...current, ...items];
+    final newQueue = [...current, ...mediaItems];
     queue.add(newQueue);
 
-    final sources = items.map((m) => AudioSource.uri(Uri.parse(m.id))).toList();
+    final sources = mediaItems.map((m) => AudioSource.uri(Uri.parse(m.id))).toList();
     await _playlist.addAll(sources);
 
     if (_player.audioSource == null) {
@@ -282,9 +289,13 @@ class MusicPlayerAudioHandler extends BaseAudioHandler
       // This would need to be implemented at a higher level
       _settings = _settings.copyWith(crossfadeDuration: seconds);
       await _storageService.savePlaybackSettings(_settings);
-      print('Crossfade setting updated: ${seconds}s (not implemented)');
+      if (kDebugMode) {
+        print('Crossfade setting updated: ${seconds}s (not implemented)');
+      }
     } catch (e) {
-      print('Crossfade not supported: $e');
+      if (kDebugMode) {
+        print('Crossfade not supported: $e');
+      }
     }
   }
 
@@ -310,18 +321,31 @@ class MusicPlayerAudioHandler extends BaseAudioHandler
   void _broadcastState() {
     final playing = _player.playing;
 
+    // Enhanced controls for better system integration
     final controls = <MediaControl>[
       MediaControl.skipToPrevious,
       if (playing) MediaControl.pause else MediaControl.play,
-      MediaControl.stop,
       MediaControl.skipToNext,
+      MediaControl.stop,
     ];
 
-    final androidCompact = [0, 1, 3];
+    // Compact view shows the most important controls
+    final androidCompact = [0, 1, 2]; // Previous, Play/Pause, Next
+
+    // System actions for enhanced media control integration
+    const systemActions = {
+      MediaAction.seek,
+      MediaAction.seekForward,
+      MediaAction.seekBackward,
+      MediaAction.setRating,
+      MediaAction.setRepeatMode,
+      MediaAction.setShuffleMode,
+    };
 
     playbackState.add(
       playbackState.value.copyWith(
         controls: controls,
+        systemActions: systemActions,
         androidCompactActionIndices: androidCompact,
         processingState: {
           ProcessingState.idle: AudioProcessingState.idle,
@@ -335,11 +359,26 @@ class MusicPlayerAudioHandler extends BaseAudioHandler
         bufferedPosition: _player.bufferedPosition,
         speed: _player.speed,
         queueIndex: _player.currentIndex,
+        // Enhanced state for better system integration
+        repeatMode: _mapRepeatMode(_settings.repeatMode),
+        shuffleMode: _settings.shuffleEnabled 
+            ? AudioServiceShuffleMode.all 
+            : AudioServiceShuffleMode.none,
       ),
     );
   }
 
-  @override
+  AudioServiceRepeatMode _mapRepeatMode(RepeatMode mode) {
+    switch (mode) {
+      case RepeatMode.none:
+        return AudioServiceRepeatMode.none;
+      case RepeatMode.one:
+        return AudioServiceRepeatMode.one;
+      case RepeatMode.all:
+        return AudioServiceRepeatMode.all;
+    }
+  }
+
   Future<void> dispose() async {
     _sleepTimer?.cancel();
     await _playbackEventSub.cancel();
