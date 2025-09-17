@@ -5,12 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
-import '../services/custom_audio_handler.dart';
 import '../services/logging_service.dart';
-import '../widgets/queue_panel.dart';
-import '../widgets/equalizer_panel.dart';
 import '../widgets/sleep_timer_dialog.dart';
-import '../models/playback_settings.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});
@@ -153,51 +149,51 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
             position: _slideAnimation,
             child: Column(
               children: [
-            // Header with blur effect
-            ClipRRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  color: Colors.black.withOpacity(0.3),
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                        tooltip: 'Close',
+                // Header with blur effect
+                ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              Navigator.pop(context);
+                            },
+                            icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                            tooltip: 'Close',
+                          ),
+                          const Text(
+                            'Now Playing',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              HapticFeedback.selectionClick();
+                              _showMoreOptions();
+                            },
+                            icon: const Icon(Icons.more_vert, color: Colors.white),
+                            tooltip: 'More options',
+                          ),
+                        ],
                       ),
-                      const Text(
-                        'Now Playing',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          HapticFeedback.selectionClick();
-                          _showMoreOptions();
-                        },
-                        icon: const Icon(Icons.more_vert, color: Colors.white),
-                        tooltip: 'More options',
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
 
-            // Album art
-            Expanded(
-              flex: 3,
-              child: Center(
+                // Album art
+                Expanded(
+                  flex: 3,
+                  child: Center(
                 child: Container(
                   width: 300,
                   height: 300,
@@ -205,7 +201,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
@@ -326,7 +322,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 activeTrackColor: Colors.white,
                                 inactiveTrackColor: Colors.grey[600],
                                 thumbColor: Colors.white,
-                                overlayColor: Colors.white.withOpacity(0.2),
+                                overlayColor: Colors.white.withValues(alpha: 0.2),
                               ),
                               child: Slider(
                                 value: _isDraggingSlider 
@@ -398,7 +394,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           onPressed: () {
                             // Toggle shuffle
                             final currentShuffle = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
-                            (audioHandler as CustomAudioHandler).setShuffleModeEnabled(!currentShuffle);
+                            audioHandler.setShuffleModeEnabled(!currentShuffle);
                           },
                           icon: Icon(
                             Icons.shuffle,
@@ -523,7 +519,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   color: Colors.white,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(alpha: 0.3),
                                       blurRadius: 20,
                                       spreadRadius: 2,
                                     ),
@@ -560,9 +556,24 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     color: Colors.grey[900],
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Center(
+                    child: Text(
+                      _showLyrics 
+                          ? 'Lyrics coming soon' 
+                          : _showQueue 
+                              ? 'Queue panel coming soon'
+                              : 'Equalizer coming soon',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
