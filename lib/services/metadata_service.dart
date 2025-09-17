@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import '../models/song.dart';
 import 'logging_service.dart';
 
@@ -28,10 +28,10 @@ class MetadataService {
     '.mp3', '.aac', '.m4a', '.wav', '.flac', '.ogg', '.wma', '.aiff', '.opus'
   ];
 
-  /// Scan device storage for audio files with optimized performance
+  /// Scan device storage for audio files with professional metadata extraction
   Future<List<Song>> scanDeviceForAudioFiles() async {
     try {
-      _loggingService.logInfo('Starting device scan for audio files');
+      _loggingService.logInfo('Starting professional device scan for audio files');
       
       // Check permissions first
       if (!await _checkAndRequestPermissions()) {
@@ -39,9 +39,6 @@ class MetadataService {
         return [];
       }
 
-      // Initialize audio player if needed
-      await _ensureAudioPlayerInitialized();
-      
       List<Song> songs = [];
       
       // Get common music directories
@@ -51,7 +48,7 @@ class MetadataService {
       for (final directory in musicDirectories) {
         if (await directory.exists()) {
           try {
-            final directorySongs = await _scanDirectory(directory);
+            final directorySongs = await _scanDirectoryWithMetadata(directory);
             songs.addAll(directorySongs);
             _loggingService.logDebug('Found ${directorySongs.length} songs in ${directory.path}');
           } catch (e, stackTrace) {
@@ -61,7 +58,7 @@ class MetadataService {
         }
       }
       
-      _loggingService.logInfo('Scan completed: found ${songs.length} audio files');
+      _loggingService.logInfo('Scan completed: found ${songs.length} audio files with complete metadata');
       return songs;
     } catch (e, stackTrace) {
       _loggingService.logError('Error scanning device for audio files', e, stackTrace);
@@ -128,35 +125,41 @@ class MetadataService {
     return directories;
   }
 
-  /// Recursively scan a directory for audio files
+  /// Recursively scan a directory for audio files (legacy method, now unused)
   Future<List<Song>> _scanDirectory(Directory directory) async {
+    // This method is now unused as we use on_audio_query directly
+    return [];
+  }
+
+  /// Scan directory with professional metadata extraction
+  Future<List<Song>> _scanDirectoryWithMetadata(Directory directory) async {
     List<Song> songs = [];
     
     try {
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File && isSupportedAudioFormat(entity.path)) {
-          final song = await _createSongFromFile(entity);
+          final song = await _createSongFromFileWithMetadata(entity);
           if (song != null) {
             songs.add(song);
           }
         }
       }
     } catch (e) {
-      print('Error scanning directory ${directory.path}: $e');
+      _loggingService.logWarning('Error scanning directory ${directory.path}: $e');
     }
     
     return songs;
   }
 
-  /// Create a Song object from a file with enhanced metadata extraction
-  Future<Song?> _createSongFromFile(File file) async {
+  /// Create Song object with professional metadata extraction
+  Future<Song?> _createSongFromFileWithMetadata(File file) async {
     try {
       final filePath = file.path;
       
       // Check cache first
       if (_metadataCache.containsKey(filePath)) {
         final cachedData = _metadataCache[filePath]!;
-        return _createSongFromCachedData(file, cachedData);
+        return _createSongFromCachedFileData(file, cachedData);
       }
       
       // Validate file
@@ -166,52 +169,103 @@ class MetadataService {
       
       final fileName = path.basename(filePath);
       
-      // Extract basic metadata from filename
-      final title = _extractTitleFromFileName(fileName);
-      final artist = _extractArtistFromFileName(fileName);
-      final album = _extractAlbumFromFileName(fileName);
+      // Default to filename-based extraction
+      String title = _extractTitleFromFileName(fileName);
+      String artist = _extractArtistFromFileName(fileName);
+      String album = _extractAlbumFromFileName(filePath);
       
       // Get file stats
       final fileStat = await file.stat();
       final fileSize = fileStat.size;
       
-      // Extract duration using reusable audio player
+      // Extract metadata using audio_metadata_reader
       int duration = 0;
       int bitrate = 0;
+      Uint8List? albumArtBytes;
+      String? genre;
+      int? trackNumber;
+      int? year;
+      String? albumArtist;
+      String? composer;
       
       try {
-        await _ensureAudioPlayerInitialized();
-        await _audioPlayer!.setFilePath(filePath);
+        final metadata = readMetadata(file, getImage: true);
         
-        final durationObj = _audioPlayer!.duration;
-        if (durationObj != null) {
-          duration = durationObj.inMilliseconds;
-          
-          // Estimate bitrate
-          if (duration > 0) {
-            bitrate = ((fileSize * 8) / (duration / 1000) / 1000).round();
-          }
+        // Use embedded metadata if available
+        if (metadata.title != null && metadata.title!.isNotEmpty) {
+          title = metadata.title!;
         }
         
-        // Don't dispose here - reuse for next file
-      } catch (e, stackTrace) {
-        _loggingService.logWarning('Error extracting duration from $filePath', e);
+        if (metadata.artist != null && metadata.artist!.isNotEmpty) {
+          artist = metadata.artist!;
+        }
+        
+        if (metadata.album != null && metadata.album!.isNotEmpty) {
+          album = metadata.album!;
+        }
+        
+        if (metadata.duration != null) {
+          duration = metadata.duration!.inMilliseconds; // Duration is already a Duration object
+        }
+        
+        // Extract additional metadata (using available fields)
+        trackNumber = metadata.trackNumber;
+        year = metadata.year?.year; // Convert DateTime to year
+        
+        // Extract album art
+        if (metadata.pictures != null && metadata.pictures!.isNotEmpty) {
+          albumArtBytes = metadata.pictures!.first.bytes;
+        }
+        
+        _loggingService.logDebug('Successfully extracted metadata from $filePath: $title by $artist');
+      } catch (e) {
+        _loggingService.logWarning('Error extracting metadata from $filePath: $e');
+        
+        // Fallback to just_audio for duration if needed
+        try {
+          await _ensureAudioPlayerInitialized();
+          await _audioPlayer!.setFilePath(filePath);
+          final durationObj = _audioPlayer!.duration;
+          if (durationObj != null) {
+            duration = durationObj.inMilliseconds;
+          }
+        } catch (e) {
+          _loggingService.logDebug('Fallback duration extraction failed for $filePath: $e');
+        }
+      }
+      
+      // Calculate bitrate if possible
+      if (duration > 0 && fileSize > 0) {
+        bitrate = ((fileSize * 8) / (duration / 1000) / 1000).round();
       }
       
       // Create metadata cache entry
-      final metadata = {
+      final metadataCacheEntry = {
         'title': title,
         'artist': artist,
         'album': album,
         'duration': duration,
         'fileSize': fileSize,
         'bitrate': bitrate,
+        'genre': genre,
+        'trackNumber': trackNumber,
+        'year': year,
+        'albumArtist': albumArtist,
+        'composer': composer,
         'lastModified': fileStat.modified.millisecondsSinceEpoch,
       };
-      _metadataCache[filePath] = metadata;
+      _metadataCache[filePath] = metadataCacheEntry;
+      
+      // Save album art if available
+      final songId = filePath.hashCode.toString();
+      String? artworkPath;
+      if (albumArtBytes != null && albumArtBytes.isNotEmpty) {
+        artworkPath = await _saveAlbumArt(songId, albumArtBytes);
+        _loggingService.logDebug('Saved album art for $title');
+      }
       
       final song = Song(
-        id: filePath.hashCode.toString(),
+        id: songId,
         title: title,
         artist: artist,
         album: album,
@@ -219,6 +273,12 @@ class MetadataService {
         duration: duration,
         fileSize: fileSize,
         bitrate: bitrate,
+        albumArtPath: artworkPath,
+        trackNumber: trackNumber,
+        year: year,
+        genre: genre,
+        albumArtist: albumArtist,
+        composer: composer,
         dateAdded: DateTime.now(),
         playCount: 0,
       );
@@ -289,7 +349,7 @@ class MetadataService {
           if (platformFile.path != null && isSupportedAudioFormat(platformFile.path!)) {
             try {
               final file = File(platformFile.path!);
-              final song = await _createSongFromFile(file);
+              final song = await _createSongFromFileWithMetadata(file);
               if (song != null) {
                 songs.add(song);
               }
@@ -348,7 +408,7 @@ class MetadataService {
   }
 
   /// Save album art to app storage and return the path
-  Future<String?> _saveAlbumArt(int songId, Uint8List? albumArtBytes) async {
+  Future<String?> _saveAlbumArt(String songId, Uint8List? albumArtBytes) async {
     if (albumArtBytes == null || albumArtBytes.isEmpty) {
       return null;
     }
@@ -477,9 +537,21 @@ class MetadataService {
     }
   }
   
-  Song _createSongFromCachedData(File file, Map<String, dynamic> cachedData) {
+  Song _createSongFromCachedFileData(File file, Map<String, dynamic> cachedData) {
+    // Check if album art exists for this song
+    final songId = file.path.hashCode.toString();
+    String? artworkPath = cachedData['artworkPath'];
+    
+    // Verify artwork file still exists
+    if (artworkPath != null) {
+      final artworkFile = File(artworkPath);
+      if (!artworkFile.existsSync()) {
+        artworkPath = null;
+      }
+    }
+    
     return Song(
-      id: file.path.hashCode.toString(),
+      id: songId,
       title: cachedData['title'] ?? 'Unknown Title',
       artist: cachedData['artist'] ?? 'Unknown Artist',
       album: cachedData['album'] ?? 'Unknown Album',
@@ -487,31 +559,21 @@ class MetadataService {
       duration: cachedData['duration'] ?? 0,
       fileSize: cachedData['fileSize'] ?? 0,
       bitrate: cachedData['bitrate'] ?? 0,
+      albumArtPath: artworkPath,
+      trackNumber: cachedData['trackNumber'],
+      year: cachedData['year'],
+      genre: cachedData['genre'],
+      albumArtist: cachedData['albumArtist'],
+      composer: cachedData['composer'],
       dateAdded: DateTime.now(),
       playCount: 0,
     );
   }
   
-  /// Batch process files for better performance
+  /// Batch process files for better performance (legacy method, now unused)
   Future<List<Song>> _processBatchFiles(List<File> files) async {
-    const batchSize = 20;
-    final List<Song> allSongs = [];
-    
-    for (int i = 0; i < files.length; i += batchSize) {
-      final batch = files.skip(i).take(batchSize);
-      final batchSongs = await Future.wait(
-        batch.map((file) => _createSongFromFile(file)),
-      );
-      
-      allSongs.addAll(batchSongs.whereType<Song>());
-      
-      // Small delay to prevent blocking UI
-      if (i + batchSize < files.length) {
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-    }
-    
-    return allSongs;
+    // This method is now unused as we use on_audio_query directly
+    return [];
   }
   
   /// Clear metadata cache

@@ -79,6 +79,8 @@ Future<void> _initializeApp() async {
     throw AppInitializationException('Failed to initialize Hive database: $e');
   }
   
+  // on_audio_query doesn't require explicit initialization
+  
   // Initialize storage service with retry mechanism
   final storageService = StorageService();
   int retryCount = 0;

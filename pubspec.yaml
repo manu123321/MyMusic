@@ -24,9 +24,8 @@ dependencies:
   path_provider: ^2.1.4
   path: ^1.9.0
 
-  # Metadata extraction (simplified - using basic file operations)
-  # flutter_media_metadata: ^1.0.0+1  # Removed - incompatible with newer AGP
-  # on_audio_query: ^2.9.0  # Removed - namespace issues with newer AGP
+  # Audio metadata extraction - reliable packages
+  audio_metadata_reader: ^0.0.1+5
 
   # Persistence
   hive: ^2.2.3
