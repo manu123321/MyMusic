@@ -478,7 +478,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         return;
       }
       
-      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final audioHandler = ref.read(audioHandlerProvider);
+      
+      // Validate audio handler type
+      if (audioHandler is! CustomAudioHandler) {
+        _showErrorSnackBar('Audio service not available');
+        return;
+      }
       
       // Convert song to MediaItem
       final mediaItem = MediaItem(

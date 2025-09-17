@@ -176,7 +176,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: Colors.black.withOpacity(0.3),
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -223,16 +223,17 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
+                        color: Colors.black.withOpacity(0.3),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
                     ],
                   ),
-                  child: StreamBuilder<bool>(
-                    stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
+                  child: StreamBuilder<PlaybackState>(
+                    stream: audioHandler.playbackState,
                     builder: (context, snapshot) {
-                      final isPlaying = snapshot.data ?? false;
+                      final playbackState = snapshot.data;
+                      final isPlaying = playbackState?.playing ?? false;
                       
                       // CRITICAL FIX: Control animation directly without postFrameCallback
                       // This prevents the flicker caused by delayed animation updates
@@ -348,7 +349,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 activeTrackColor: Colors.white,
                                 inactiveTrackColor: Colors.grey[600],
                                 thumbColor: Colors.white,
-                                overlayColor: Colors.white.withValues(alpha: 0.2),
+                                overlayColor: Colors.white.withOpacity(0.2),
                               ),
                               child: Slider(
                                 value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
@@ -532,10 +533,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           icon: const Icon(Icons.skip_previous, color: Colors.white),
                           iconSize: 40,
                         ),
-                        StreamBuilder<bool>(
-                          stream: audioHandler.playbackState.map((state) => state.playing).distinct(),
+                        StreamBuilder<PlaybackState>(
+                          stream: audioHandler.playbackState,
                           builder: (context, snapshot) {
-                            final isPlaying = snapshot.data ?? false;
+                            final playbackState = snapshot.data;
+                            final isPlaying = playbackState?.playing ?? false;
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
@@ -585,7 +587,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   color: _isProcessingPlayPause ? Colors.grey[300] : Colors.white,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
+                                      color: Colors.black.withOpacity(0.3),
                                       blurRadius: 20,
                                       spreadRadius: 2,
                                     ),
