@@ -14,7 +14,7 @@ class NetworkService {
   final LoggingService _loggingService = LoggingService();
   final Connectivity _connectivity = Connectivity();
   
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   final StreamController<NetworkStatus> _networkStatusController = 
       StreamController<NetworkStatus>.broadcast();
   
@@ -42,7 +42,7 @@ class NetworkService {
       
       // Listen to connectivity changes
       _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-        _onConnectivityChanged,
+        (List<ConnectivityResult> results) => _onConnectivityChanged(results.first),
         onError: (error, stackTrace) {
           _loggingService.logError('Connectivity stream error', error, stackTrace);
         },
@@ -61,7 +61,7 @@ class NetworkService {
   Future<void> _checkConnectivity() async {
     try {
       final connectivityResult = await _connectivity.checkConnectivity();
-      _updateNetworkStatus(_getNetworkStatusFromResult(connectivityResult));
+      _updateNetworkStatus(_getNetworkStatusFromResult(connectivityResult.first));
     } catch (e, stackTrace) {
       _loggingService.logError('Error checking connectivity', e, stackTrace);
       _updateNetworkStatus(NetworkStatus.unknown);
@@ -190,7 +190,6 @@ class NetworkService {
       
       await _connectivitySubscription?.cancel();
       await _networkStatusController.close();
-      await _errorSubject.close();
       
       _isInitialized = false;
       _loggingService.logInfo('Network service disposed');

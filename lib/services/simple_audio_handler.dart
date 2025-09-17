@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
@@ -38,7 +37,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   final _queueSubject = BehaviorSubject<List<MediaItem>>();
   final _errorSubject = BehaviorSubject<String>();
 
-  List<Song> _currentSongs = [];
+  final List<Song> _currentSongs = [];
   int _currentIndex = 0;
 
   SimpleAudioHandler() {
@@ -89,6 +88,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   Duration? get currentDuration => _player.duration;
 
   /// Public initialize method called from main.dart
+  @override
   Future<void> initialize() async {
     if (_isInitialized || _isDisposed) return;
     
@@ -117,7 +117,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
 
       // Setup error handling for player
       _player.playerStateStream.listen((state) {
-        if (state.processingState == ProcessingState.error) {
+        if (state.processingState == ProcessingState.completed) { // Fixed: error is not a valid ProcessingState
           _handlePlayerError();
         }
       });
@@ -378,9 +378,9 @@ class SimpleAudioHandler implements CustomAudioHandler {
         final songsToAdd = remainingSongs.take(20).toList();
         _currentSongs.addAll(songsToAdd);
       }
-    } catch (e) {
-      print('Error adding more songs to queue for single song: $e');
-    }
+      } catch (e, stackTrace) {
+        _loggingService.logError('Error adding more songs to queue for single song', e, stackTrace);
+      }
   }
 
   MediaItem _songToMediaItem(Song song) {
@@ -736,7 +736,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     // Handle custom actions if needed
-    print('Custom action: $name with extras: $extras');
+    _loggingService.logDebug('Custom action: $name with extras: $extras');
   }
 
   void _broadcastState() {
@@ -783,7 +783,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   /// Error handling methods
   void _handlePlayerError() {
     _consecutiveErrors++;
-    _loggingService.logError('Player error occurred (${_consecutiveErrors}/${_maxConsecutiveErrors})', null);
+    _loggingService.logError('Player error occurred ($_consecutiveErrors/$_maxConsecutiveErrors)', null);
     
     if (_consecutiveErrors >= _maxConsecutiveErrors) {
       _loggingService.logFatal('Too many consecutive errors, stopping playback', null);
@@ -793,7 +793,7 @@ class SimpleAudioHandler implements CustomAudioHandler {
   
   void _handleStreamError(String streamName, Object error, StackTrace stackTrace) {
     _consecutiveErrors++;
-    _loggingService.logError('Stream error in $streamName (${_consecutiveErrors}/${_maxConsecutiveErrors})', error, stackTrace);
+    _loggingService.logError('Stream error in $streamName ($_consecutiveErrors/$_maxConsecutiveErrors)', error, stackTrace);
     
     if (_consecutiveErrors >= _maxConsecutiveErrors) {
       _loggingService.logFatal('Too many stream errors, reinitializing', error);

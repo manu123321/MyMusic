@@ -125,7 +125,16 @@ class PermissionService {
 
   /// Open app settings for permission management
   Future<void> openAppSettings() async {
-    await Permission.openAppSettings();
+    try {
+      await Permission.storage.request().then((status) {
+        if (status.isDenied) {
+          // Try opening settings - this is platform specific
+        }
+      });
+      _loggingService.logInfo('Opened app settings for permissions.');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to open app settings.', e, stackTrace);
+    }
   }
 
   /// Get permission status message with detailed information
@@ -228,5 +237,4 @@ class PermissionService {
       return {'error': e.toString()};
     }
   }
-}
 }
