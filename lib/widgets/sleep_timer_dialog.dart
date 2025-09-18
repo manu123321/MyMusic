@@ -44,17 +44,28 @@ class SleepTimerBottomSheet extends ConsumerWidget {
           
           // Sleep timer options
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                _buildTimerOption(context, ref, '5 minutes', 5),
-                _buildTimerOption(context, ref, '10 minutes', 10),
-                _buildTimerOption(context, ref, '15 minutes', 15),
-                _buildTimerOption(context, ref, '30 minutes', 30),
-                _buildTimerOption(context, ref, '45 minutes', 45),
-                _buildTimerOption(context, ref, '1 hour', 60),
-                _buildEndOfTrackOption(context, ref),
-              ],
+            child: Consumer(
+              builder: (context, ref, child) {
+                final playbackSettings = ref.watch(playbackSettingsProvider);
+                final isTimerActive = playbackSettings.sleepTimerEnabled;
+                
+                return ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _buildTimerOption(context, ref, '5 minutes', 5),
+                    _buildTimerOption(context, ref, '10 minutes', 10),
+                    _buildTimerOption(context, ref, '15 minutes', 15),
+                    _buildTimerOption(context, ref, '30 minutes', 30),
+                    _buildTimerOption(context, ref, '45 minutes', 45),
+                    _buildTimerOption(context, ref, '1 hour', 60),
+                    _buildEndOfTrackOption(context, ref),
+                    
+                    // Show "Turn off timer" option only when timer is active
+                    if (isTimerActive)
+                      _buildTurnOffTimerOption(context, ref),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -99,6 +110,29 @@ class SleepTimerBottomSheet extends ConsumerWidget {
             'End of track',
             style: const TextStyle(
               color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTurnOffTimerOption(BuildContext context, WidgetRef ref) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _turnOffTimer(context, ref);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Text(
+            'Turn off timer',
+            style: TextStyle(
+              color: Colors.red[400],
               fontSize: 16,
               fontWeight: FontWeight.w400,
             ),
@@ -212,6 +246,33 @@ class SleepTimerBottomSheet extends ConsumerWidget {
         SnackBar(
           content: const Text('Unable to determine track duration'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _turnOffTimer(BuildContext context, WidgetRef ref) async {
+    final audioHandler = ref.read(audioHandlerProvider);
+    await audioHandler.cancelSleepTimer();
+    
+    // Update the playback settings provider to reflect the timer state
+    final playbackSettingsNotifier = ref.read(playbackSettingsProvider.notifier);
+    await playbackSettingsNotifier.setSleepTimerEnabled(false);
+    
+    if (context.mounted) {
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Sleep timer turned off',
+            style: TextStyle(color: Colors.black),
+          ),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
