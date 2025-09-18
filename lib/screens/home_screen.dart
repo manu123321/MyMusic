@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _isLoading = false;
   String? _errorMessage;
   
+  // Timer for auto-dismiss functionality
+  Timer? _autoDismissTimer;
+  
   // Performance optimization - keep alive
   @override
   bool get wantKeepAlive => true;
@@ -46,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _autoDismissTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
@@ -61,11 +66,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
   
   void _onSearchFocusChanged() {
-    if (!_searchFocusNode.hasFocus && _searchQuery.isEmpty) {
-      setState(() {
+    setState(() {
+      // Update UI when focus changes
+      if (!_searchFocusNode.hasFocus && _searchQuery.isEmpty) {
         _isSearching = false;
-      });
-    }
+      }
+    });
   }
 
   @override
@@ -99,20 +105,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshData,
-          color: const Color(0xFF00E676),
-          backgroundColor: Colors.grey[900],
-          child: Column(
-            children: [
-              // Header with search
-              _buildHeader(),
-              
-              // Main content
-              Expanded(
-                child: _buildMainContent(filteredSongs),
-              ),
-            ],
+        child: GestureDetector(
+          onTap: () {
+            // Dismiss search when tapping outside
+            if (_searchFocusNode.hasFocus) {
+              _searchFocusNode.unfocus();
+            }
+          },
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            color: const Color(0xFF00E676),
+            backgroundColor: Colors.grey[900],
+            child: Column(
+              children: [
+                // Header with search
+                _buildHeader(),
+                
+                // Main content
+                Expanded(
+                  child: _buildMainContent(filteredSongs),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -168,12 +182,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           Semantics(
             label: 'Search music',
             hint: 'Search for songs, artists, or albums',
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
               decoration: BoxDecoration(
                 color: Colors.grey[900],
                 borderRadius: BorderRadius.circular(25),
                 border: _searchFocusNode.hasFocus 
                     ? Border.all(color: const Color(0xFF00E676), width: 2)
+                    : Border.all(color: Colors.transparent, width: 2),
+                boxShadow: _searchFocusNode.hasFocus 
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF00E676).withOpacity(0.2),
+                          blurRadius: 8,
+                          spreadRadius: 0,
+                        )
+                      ]
                     : null,
               ),
               child: TextField(
@@ -183,16 +208,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 style: const TextStyle(color: Colors.white),
                 textInputAction: TextInputAction.search,
                 onSubmitted: _onSearchSubmitted,
+                onTap: () {
+                  // Provide haptic feedback when search is activated
+                  HapticFeedback.selectionClick();
+                },
                 decoration: InputDecoration(
                   hintText: 'Search songs, artists, albums...',
                   hintStyle: TextStyle(color: Colors.grey[400]),
-                  prefixIcon: Icon(
-                    Icons.search, 
-                    color: _searchFocusNode.hasFocus 
-                        ? const Color(0xFF00E676) 
-                        : Colors.grey[400],
+                  prefixIcon: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.search,
+                      key: ValueKey(_searchFocusNode.hasFocus),
+                      color: _searchFocusNode.hasFocus 
+                          ? const Color(0xFF00E676) 
+                          : Colors.grey[400],
+                    ),
                   ),
-                  suffixIcon: _isSearching
+                  suffixIcon: _searchFocusNode.hasFocus || _isSearching
                       ? IconButton(
                           onPressed: _clearSearch,
                           icon: Icon(Icons.clear, color: Colors.grey[400]),
@@ -344,6 +377,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _searchQuery = value;
       _isSearching = value.isNotEmpty;
     });
+    
+    // Cancel any existing auto-dismiss timer
+    _autoDismissTimer?.cancel();
+    
+    // If user manually clears all text, auto-dismiss search after a short delay
+    if (value.isEmpty && _searchFocusNode.hasFocus) {
+      _autoDismissTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted && _searchQuery.isEmpty && _searchFocusNode.hasFocus) {
+          _searchFocusNode.unfocus();
+          _loggingService.logInfo('Search auto-dismissed after clearing text');
+        }
+      });
+    }
   }
   
   void _onSearchSubmitted(String value) {
@@ -354,6 +400,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
   
   void _clearSearch() {
+    _autoDismissTimer?.cancel();
     _searchController.clear();
     setState(() {
       _searchQuery = '';
@@ -361,6 +408,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
     _searchFocusNode.unfocus();
     HapticFeedback.selectionClick();
+    
+    // Log for analytics
+    _loggingService.logInfo('Search cleared by user');
   }
   
   Widget _buildLoadingState() {
