@@ -480,9 +480,9 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       
       // Respect repeat mode for manual skip
       if (isLastSong && _settings.repeatMode == RepeatMode.none) {
-        // At last song with no repeat - stop playback
-        _loggingService.logInfo('SKIP NEXT: At last song with no repeat - stopping playback');
-        await stop();
+        // At last song with no repeat - restart current song (consistent with backward behavior)
+        _loggingService.logInfo('SKIP NEXT: At last song with no repeat - restarting current song');
+        await _player.seek(Duration.zero);
         return;
       }
       
