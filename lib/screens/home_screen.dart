@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
+import '../widgets/playlist_card.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
 import '../services/custom_audio_handler.dart';
@@ -12,6 +13,8 @@ import '../services/storage_service.dart';
 import '../services/logging_service.dart';
 import 'now_playing_screen.dart';
 import 'playlist_screen.dart';
+import 'create_playlist_screen.dart';
+import 'playlist_detail_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -172,7 +175,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ],
           ),
-                    const SizedBox(height: 16),
+          const SizedBox(height: 16),
+          
+          // Playlist cards section
+          _buildPlaylistCardsSection(),
+          
+          const SizedBox(height: 16),
                     
           // Search bar
           Semantics(
@@ -585,5 +593,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
       );
     }
+  }
+
+  Widget _buildPlaylistCardsSection() {
+    final playlists = ref.watch(playlistsProvider);
+    final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
+    
+    // Don't show anything if there are no playlists
+    if (userPlaylists.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Your Playlists',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 160, // Fixed height for horizontal scrolling
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: userPlaylists.length,
+            itemBuilder: (context, index) {
+              final playlist = userPlaylists[index];
+              return Container(
+                width: 140,
+                margin: EdgeInsets.only(
+                  right: index < userPlaylists.length - 1 ? 12 : 0,
+                ),
+                child: PlaylistCard(
+                  title: playlist.name,
+                  subtitle: '${playlist.songIds.length} songs',
+                  imagePath: playlist.coverArtPath,
+                  themeColor: playlist.colorTheme != null 
+                      ? Color(int.parse(playlist.colorTheme!.substring(1), radix: 16) + 0xFF000000)
+                      : null,
+                  onTap: () => _showPlaylistSongs(playlist),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCreatePlaylistDialog() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const CreatePlaylistScreen(),
+      ),
+    ).then((result) {
+      // Refresh playlists if a new one was created
+      if (result == true) {
+        ref.read(playlistsProvider.notifier).refreshPlaylists();
+      }
+    });
+  }
+
+  void _showPlaylistSongs(Playlist playlist) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaylistDetailScreen(playlist: playlist),
+      ),
+    );
   }
 }
