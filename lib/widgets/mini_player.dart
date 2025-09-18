@@ -20,11 +20,14 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     with TickerProviderStateMixin {
   late AnimationController _slideController;
   late AnimationController _progressController;
+  late AnimationController _swipeController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _progressAnimation;
+  late Animation<Offset> _swipeAnimation;
   
   final LoggingService _loggingService = LoggingService();
   bool _isExpanded = false;
+  bool _isSwipeInProgress = false;
 
   @override
   void initState() {
@@ -37,6 +40,11 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    
+    _swipeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     
@@ -55,12 +63,21 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       parent: _progressController,
       curve: Curves.easeInOut,
     ));
+    
+    _swipeAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _swipeController,
+      curve: Curves.easeOutCubic,
+    ));
   }
   
   @override
   void dispose() {
     _slideController.dispose();
     _progressController.dispose();
+    _swipeController.dispose();
     super.dispose();
   }
 
@@ -170,97 +187,188 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                       ),
                     ),
                     
-                    // Main content with separate tap areas
+                    // Main content with separate tap areas and swipe gestures
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          children: [
-                            // Album art and song info - tappable area for navigation
-                            Expanded(
-                              child: Material(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    _loggingService.logInfo('Mini player tapped - opening now playing');
-                                    Navigator.of(context).push(
-                                      PageRouteBuilder(
-                                        pageBuilder: (context, animation, secondaryAnimation) => const NowPlayingScreen(),
-                                        transitionDuration: const Duration(milliseconds: 300),
-                                        reverseTransitionDuration: const Duration(milliseconds: 200),
-                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                          const begin = Offset(0.0, 1.0);
-                                          const end = Offset.zero;
-                                          const curve = Curves.easeOutCubic;
-                                          
-                                          var tween = Tween(begin: begin, end: end).chain(
-                                            CurveTween(curve: curve),
-                                          );
-                                          
-                                          return SlideTransition(
-                                            position: animation.drive(tween),
-                                            child: child,
-                                          );
-                                        },
-                                        fullscreenDialog: true,
-                                      ),
-                                    );
-                                  },
-                                  onLongPress: () {
-                                    HapticFeedback.mediumImpact();
-                                    setState(() {
-                                      _isExpanded = !_isExpanded;
-                                    });
-                                  },
-                                  splashColor: const Color(0xFF00E676).withOpacity(0.1),
-                                  highlightColor: Colors.white.withOpacity(0.05),
+                      child: GestureDetector(
+                        onHorizontalDragStart: (details) {
+                          setState(() {
+                            _isSwipeInProgress = true;
+                          });
+                        },
+                        onHorizontalDragUpdate: (details) {
+                          if (_isSwipeInProgress) {
+                            // Update swipe animation based on drag
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final dragDistance = details.localPosition.dx;
+                            final progress = (dragDistance / screenWidth).abs().clamp(0.0, 0.3);
+                            
+                            // Only update if the drag is significant enough to prevent accidental triggers
+                            if (dragDistance.abs() > 10) {
+                              _swipeController.value = progress;
+                              
+                              // Update animation offset with resistance for better feel
+                              final resistance = 0.5; // Add resistance like iOS
+                              _swipeAnimation = Tween<Offset>(
+                                begin: Offset.zero,
+                                end: Offset((dragDistance / screenWidth) * resistance, 0),
+                              ).animate(_swipeController);
+                            }
+                          }
+                        },
+                        onHorizontalDragEnd: (details) {
+                          if (_isSwipeInProgress) {
+                            _handleSwipeEnd(details, audioHandler);
+                          }
+                        },
+                        child: SlideTransition(
+                          position: _swipeAnimation,
+                          child: Stack(
+                            children: [
+                              // Main content
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 child: Row(
                                   children: [
-                                    // Album art with enhanced styling
-                                    _buildAlbumArt(currentSong),
-                                    const SizedBox(width: 12),
-                                    
-                                    // Song info
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            currentSong.title,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                // Album art and song info - tappable area for navigation
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: _isSwipeInProgress ? null : () {
+                                        HapticFeedback.lightImpact();
+                                        _loggingService.logInfo('Mini player tapped - opening now playing');
+                                        Navigator.of(context).push(
+                                          PageRouteBuilder(
+                                            pageBuilder: (context, animation, secondaryAnimation) => const NowPlayingScreen(),
+                                            transitionDuration: const Duration(milliseconds: 300),
+                                            reverseTransitionDuration: const Duration(milliseconds: 200),
+                                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                              const begin = Offset(0.0, 1.0);
+                                              const end = Offset.zero;
+                                              const curve = Curves.easeOutCubic;
+                                              
+                                              var tween = Tween(begin: begin, end: end).chain(
+                                                CurveTween(curve: curve),
+                                              );
+                                              
+                                              return SlideTransition(
+                                                position: animation.drive(tween),
+                                                child: child,
+                                              );
+                                            },
+                                            fullscreenDialog: true,
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            currentSong.artist ?? '',
-                                            style: TextStyle(
-                                              color: Colors.grey[400],
-                                              fontSize: 14,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                        );
+                                      },
+                                      onLongPress: _isSwipeInProgress ? null : () {
+                                        HapticFeedback.mediumImpact();
+                                        setState(() {
+                                          _isExpanded = !_isExpanded;
+                                        });
+                                      },
+                                      splashColor: const Color(0xFF00E676).withOpacity(0.1),
+                                      highlightColor: Colors.white.withOpacity(0.05),
+                                    child: Row(
+                                      children: [
+                                        // Album art with enhanced styling
+                                        _buildAlbumArt(currentSong),
+                                        const SizedBox(width: 12),
+                                        
+                                        // Song info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                currentSong.title,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                currentSong.artist ?? '',
+                                                style: TextStyle(
+                                                  color: Colors.grey[400],
+                                                  fontSize: 14,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                      ),
-                                    ],
+                                        ),
+                                      ],
+                                    ),
+                                    ),
                                   ),
                                 ),
+                                
+                                    // Control buttons - separate tap area (won't navigate)
+                                    _buildControlButtons(audioHandler),
+                                  ],
+                                ),
                               ),
-                            ),
-                            
-                            // Control buttons - separate tap area (won't navigate)
-                            _buildControlButtons(audioHandler),
-                          ],
+                              
+                              // Swipe indicator overlay
+                              if (_isSwipeInProgress)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: AnimatedBuilder(
+                                      animation: _swipeController,
+                                      builder: (context, child) {
+                                        final progress = _swipeController.value;
+                                        final isSwipeRight = _swipeAnimation.value.dx > 0;
+                                        
+                                        return Center(
+                                          child: AnimatedOpacity(
+                                            opacity: progress * 3, // Make it more visible
+                                            duration: const Duration(milliseconds: 100),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.7),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isSwipeRight ? Icons.skip_previous : Icons.skip_next,
+                                                    color: Colors.white,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    isSwipeRight ? 'Previous' : 'Next',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -586,4 +694,46 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
         return 'Toggle repeat';
     }
   }
+  
+  void _handleSwipeEnd(DragEndDetails details, audioHandler) {
+    final velocity = details.primaryVelocity ?? 0;
+    const swipeThreshold = 50.0; // Lower threshold for better responsiveness
+    
+    // Reset animation first
+    _swipeController.reverse().then((_) {
+      _swipeAnimation = Tween<Offset>(
+        begin: Offset.zero,
+        end: Offset.zero,
+      ).animate(_swipeController);
+      
+      setState(() {
+        _isSwipeInProgress = false;
+      });
+    });
+    
+    // Only process swipe if velocity is significant enough
+    if (velocity.abs() < swipeThreshold) {
+      setState(() {
+        _isSwipeInProgress = false;
+      });
+      return;
+    }
+    
+    try {
+      if (velocity > 0) {
+        // Swipe right - Previous song
+        HapticFeedback.mediumImpact();
+        audioHandler.skipToPrevious();
+        _loggingService.logInfo('Swipe right - Previous song');
+      } else {
+        // Swipe left - Next song  
+        HapticFeedback.mediumImpact();
+        audioHandler.skipToNext();
+        _loggingService.logInfo('Swipe left - Next song');
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error handling swipe gesture', e, stackTrace);
+    }
+  }
+  
 }
