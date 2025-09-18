@@ -68,6 +68,8 @@ class _SongListTileState extends ConsumerState<SongListTile>
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: _isLoading ? null : (widget.onTap ?? _playSong),
+            splashColor: const Color(0xFF00E676).withOpacity(0.2),
+            highlightColor: const Color(0xFF00E676).withOpacity(0.1),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
@@ -277,8 +279,8 @@ class _SongListTileState extends ConsumerState<SongListTile>
     });
 
     try {
-      // Haptic feedback
-      HapticFeedback.selectionClick();
+      // Enhanced haptic feedback for better UX
+      HapticFeedback.mediumImpact();
 
       // Validate song file exists
       if (!widget.song.fileExists) {
@@ -327,19 +329,12 @@ class _SongListTileState extends ConsumerState<SongListTile>
         ref.read(storageServiceProvider).addToRecentlyPlayed(widget.song.id),
       ]);
 
-      // Navigate to now playing screen with delay to prevent glitches
-      if (mounted) {
-        // Small delay to ensure playback is fully started
-        await Future.delayed(const Duration(milliseconds: 100));
-        
-        if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const NowPlayingScreen(),
-            ),
-          );
-        }
-      }
+      // Song will start playing and show in mini player
+      // User can tap mini player to navigate to Now Playing screen
+      _loggingService.logInfo('Song started playing: ${widget.song.title}');
+      
+      // Provide subtle visual feedback that song is now playing
+      _showSuccessSnackBar('♪ Now playing: ${widget.song.title}');
     } catch (e, stackTrace) {
       _loggingService.logError('Error playing song: ${widget.song.title}', e, stackTrace);
       _showErrorSnackBar('Unable to play ${widget.song.title}');

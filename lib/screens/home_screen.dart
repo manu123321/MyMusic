@@ -517,14 +517,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       
       _loggingService.logInfo('Started playing: ${song.title}');
       
-      // Navigate to now playing screen
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const NowPlayingScreen(),
-          ),
-        );
-      }
+      // Song will start playing and show in mini player
+      // User can tap mini player to navigate to Now Playing screen
+      _loggingService.logInfo('Song started playing from home screen: ${song.title}');
     } catch (e, stackTrace) {
       _loggingService.logError('Error playing song: ${song.title}', e, stackTrace);
       _showErrorSnackBar('Unable to play ${song.title}');
