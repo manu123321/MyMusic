@@ -434,10 +434,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         Consumer(
                           builder: (context, ref, child) {
                             final playbackState = ref.watch(playbackStateProvider).value;
+                            final currentRepeat = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
+                            
                             return IconButton(
                               onPressed: () {
-                                // Toggle repeat
-                                final currentRepeat = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
+                                HapticFeedback.selectionClick();
+                                // Cycle through repeat modes: Off -> All -> One -> Off
                                 AudioServiceRepeatMode nextRepeat;
                                 switch (currentRepeat) {
                                   case AudioServiceRepeatMode.none:
@@ -455,12 +457,41 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 }
                                 audioHandler.setRepeatMode(nextRepeat);
                               },
-                              icon: Icon(
-                                _getRepeatIcon(playbackState?.repeatMode ?? AudioServiceRepeatMode.none),
-                                color: playbackState?.repeatMode != AudioServiceRepeatMode.none
-                                    ? Colors.green
-                                    : Colors.grey[400],
+                              icon: Stack(
+                                children: [
+                                  Icon(
+                                    _getRepeatIcon(currentRepeat),
+                                    color: _getRepeatIconColor(currentRepeat),
+                                    size: 24,
+                                  ),
+                                  // Show "1" indicator for repeat one mode
+                                  if (currentRepeat == AudioServiceRepeatMode.one)
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: Colors.green,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.black, width: 1),
+                                        ),
+                                        child: const Center(
+                                          child: Text(
+                                            '1',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
+                              tooltip: _getRepeatTooltip(currentRepeat),
                             );
                           },
                         ),
@@ -632,7 +663,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   IconData _getRepeatIcon(AudioServiceRepeatMode mode) {
     switch (mode) {
       case AudioServiceRepeatMode.one:
-        return Icons.repeat_one;
+        return Icons.repeat; // Use regular repeat icon, "1" indicator will be shown separately
       case AudioServiceRepeatMode.all:
         return Icons.repeat;
       case AudioServiceRepeatMode.none:
@@ -641,6 +672,33 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         return Icons.repeat;
     }
   }
+
+  Color _getRepeatIconColor(AudioServiceRepeatMode mode) {
+    switch (mode) {
+      case AudioServiceRepeatMode.one:
+        return Colors.green; // Active - repeating current song
+      case AudioServiceRepeatMode.all:
+        return Colors.green; // Active - repeating all songs
+      case AudioServiceRepeatMode.none:
+        return Colors.grey[400]!; // Inactive - no repeat
+      case AudioServiceRepeatMode.group:
+        return Colors.grey[400]!; // Inactive - treat as no repeat
+    }
+  }
+
+  String _getRepeatTooltip(AudioServiceRepeatMode mode) {
+    switch (mode) {
+      case AudioServiceRepeatMode.one:
+        return 'Repeat current song';
+      case AudioServiceRepeatMode.all:
+        return 'Repeat all songs';
+      case AudioServiceRepeatMode.none:
+        return 'No repeat';
+      case AudioServiceRepeatMode.group:
+        return 'No repeat';
+    }
+  }
+
   
   BoxDecoration _buildBackgroundGradient(MediaItem? currentSong) {
     // Create dynamic background based on song or use default
