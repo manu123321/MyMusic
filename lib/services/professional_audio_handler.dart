@@ -214,13 +214,39 @@ class ProfessionalAudioHandler extends BaseAudioHandler
   void _handleSongCompletion() {
     _loggingService.logInfo('Song completed: ${_currentSong?.title ?? "Unknown"}');
     
-    // just_audio handles progression based on LoopMode we set:
-    // - LoopMode.off: Stops after last song
-    // - LoopMode.all: Continues to first song after last
-    // - LoopMode.one: Repeats current song
-    // No manual intervention needed - the player respects our repeat mode settings
+    // Check if we're at the last song with repeat off
+    final isLastSong = _currentIndex == _queue.length - 1;
+    final shouldStop = isLastSong && _settings.repeatMode == RepeatMode.none;
     
-    _loggingService.logInfo('Automatic progression handled by just_audio LoopMode: ${_settings.repeatMode}');
+    if (shouldStop) {
+      // Last song completed with repeat off - update UI to show stopped state
+      _loggingService.logInfo('Last song completed with repeat off - updating UI to stopped state');
+      
+      // Update playback state to show play button (not pause)
+      Future.microtask(() {
+        if (!_isDisposed) {
+          _playbackStateSubject.add(
+            _playbackStateSubject.value.copyWith(
+              playing: false, // Show play button
+              processingState: AudioProcessingState.ready, // Ready to play again
+              controls: [
+                MediaControl.skipToPrevious,
+                MediaControl.play, // Play button (not pause)
+                MediaControl.skipToNext,
+              ],
+            ),
+          );
+          
+          // Keep position timer running but in paused mode for UI updates
+          _startPositionTimer(pausedMode: true);
+        }
+      });
+    } else {
+      // just_audio handles other cases automatically:
+      // - LoopMode.all: Continues to first song after last
+      // - LoopMode.one: Repeats current song
+      _loggingService.logInfo('Automatic progression handled by just_audio LoopMode: ${_settings.repeatMode}');
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -373,6 +399,16 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         return;
       }
       
+      // Check if player is in stopped/completed state and needs to be restarted
+      final processingState = _player.processingState;
+      if (processingState == ProcessingState.completed || processingState == ProcessingState.idle) {
+        _loggingService.logInfo('Player in completed/idle state, seeking to restart from beginning');
+        // Seek to beginning of current song to restart properly
+        await _player.seek(Duration.zero, index: _currentIndex);
+        // Ensure position is reset to zero
+        _positionSubject.add(Duration.zero);
+      }
+      
       // Update state immediately for responsive UI
       _playbackStateSubject.add(
         _playbackStateSubject.value.copyWith(
@@ -386,7 +422,18 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       );
       
       await _player.play();
+      
+      // Always start position timer when playing starts
       _startPositionTimer(pausedMode: false);
+      
+      // Force immediate position update after a short delay to ensure progress bar starts
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!_isDisposed && _player.playing) {
+          final currentPosition = _player.position;
+          _positionSubject.add(currentPosition);
+          _updatePlaybackState();
+        }
+      });
       
       _loggingService.logInfo('Playback started: ${_currentSong!.title}');
       
@@ -440,7 +487,8 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       await _player.stop();
       _stopPositionTimer();
       
-      _mediaItemSubject.add(null);
+      // Keep current media item visible in UI (don't set to null)
+      // This prevents "No song playing" message when stopped at end of playlist
       _positionSubject.add(Duration.zero);
       _updatePlaybackState();
       
@@ -557,14 +605,19 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         : const Duration(milliseconds: 100); // Fast updates when playing for smooth progress
     
     _positionTimer = Timer.periodic(updateInterval, (timer) {
-      if (!_isDisposed) {
+      if (!_isDisposed && _currentSong != null) {
         final position = _player.position;
+        final duration = _player.duration;
+        
+        // Always update position stream
         _positionSubject.add(position);
         
-        // CRITICAL FIX: Always update position, even when not playing
-        // This ensures progress bar works immediately on first song and shows correct paused position
-        if (_player.playing || _currentSong != null) {
-          _updatePlaybackState();
+        // Always update playback state to keep UI in sync
+        _updatePlaybackState();
+        
+        // Log position updates for debugging (only in playing mode to avoid spam)
+        if (!pausedMode && _player.playing) {
+          _loggingService.logDebug('Position update: ${position.inSeconds}s / ${duration?.inSeconds ?? 0}s');
         }
       }
     });
@@ -584,9 +637,18 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       final speed = _player.speed;
       final currentIndex = _player.currentIndex;
 
+      // Special case: if song completed and we're at last song with repeat off
+      final isLastSong = _currentIndex == _queue.length - 1;
+      final shouldShowStopped = processingState == ProcessingState.completed && 
+                                isLastSong && 
+                                _settings.repeatMode == RepeatMode.none;
+
+      // Override playing state if song completed at end of playlist
+      final effectivePlaying = shouldShowStopped ? false : playing;
+
       final controls = <MediaControl>[
         MediaControl.skipToPrevious,
-        if (playing) MediaControl.pause else MediaControl.play,
+        if (effectivePlaying) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
       ];
 
@@ -602,7 +664,7 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: _mapProcessingState(processingState),
-        playing: playing,
+        playing: effectivePlaying,
         updatePosition: position,
         bufferedPosition: bufferedPosition,
         speed: speed,
