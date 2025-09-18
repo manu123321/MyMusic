@@ -62,7 +62,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
               ? Border.all(color: const Color(0xFF00E676), width: 1)
               : null,
         ),
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -71,7 +71,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
             splashColor: const Color(0xFF00E676).withOpacity(0.2),
             highlightColor: const Color(0xFF00E676).withOpacity(0.1),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               child: Row(
                 children: [
                   // Album art with playing indicator
@@ -118,29 +118,11 @@ class _SongListTileState extends ConsumerState<SongListTile>
                     ),
                   ),
 
-                  // Duration and options
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (widget.showDuration)
-                        Text(
-                          widget.song.formattedDuration,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      if (widget.showRating && widget.song.rating != null)
-                        const SizedBox(height: 2),
-                      if (widget.showRating && widget.song.rating != null)
-                        _buildRatingStars(),
-                    ],
-                  ),
+                  // Rating display (if enabled)
+                  if (widget.showRating && widget.song.rating != null)
+                    _buildRatingStars(),
 
-                  const SizedBox(width: 8),
-
-                  // More options button
+                  // More options button - positioned very close to right edge
                   IconButton(
                     onPressed: widget.onMorePressed ?? _showSongOptions,
                     icon: Icon(
@@ -150,9 +132,11 @@ class _SongListTileState extends ConsumerState<SongListTile>
                     ),
                     tooltip: 'More options',
                     constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
+                      minWidth: 24,
+                      minHeight: 24,
                     ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
@@ -404,14 +388,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
               },
             ),
             _buildOptionTile(
-              icon: Icons.star_rate,
-              title: 'Rate song',
-              onTap: () {
-                Navigator.pop(context);
-                _showRatingDialog();
-              },
-            ),
-            _buildOptionTile(
               icon: Icons.info_outline,
               title: 'Song info',
               onTap: () {
@@ -638,104 +614,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
     );
   }
 
-  void _showRatingDialog() {
-    double currentRating = widget.song.rating ?? 0.0;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Colors.grey[900],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Rate this song',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.song.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        currentRating = (index + 1).toDouble();
-                      });
-                      HapticFeedback.selectionClick();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        index < currentRating.round()
-                            ? Icons.star
-                            : Icons.star_border,
-                        color: Colors.amber,
-                        size: 32,
-                      ),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                currentRating == 0 ? 'No rating' : '${currentRating.toInt()} star${currentRating > 1 ? 's' : ''}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final navigator = Navigator.of(context);
-                  final updatedSong = widget.song.setRating(currentRating);
-                  await ref.read(songsProvider.notifier).updateSong(updatedSong);
-
-                  if (mounted) {
-                    navigator.pop();
-                    _showSuccessSnackBar('Rating updated');
-                  }
-                } catch (e, stackTrace) {
-                  _loggingService.logError('Error updating rating', e, stackTrace);
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    _showErrorSnackBar('Failed to update rating');
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00E676),
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showSongInfoDialog() {
     showDialog(
