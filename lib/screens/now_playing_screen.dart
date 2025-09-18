@@ -502,17 +502,27 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                             color: _showEqualizer ? Colors.green : Colors.grey[400],
                           ),
                         ),
-                        IconButton(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => const SleepTimerDialog(),
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final playbackSettings = ref.watch(playbackSettingsProvider);
+                            final isTimerActive = playbackSettings.sleepTimerEnabled;
+                            
+                            return IconButton(
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.transparent,
+                                  isScrollControlled: true,
+                                  builder: (context) => const SleepTimerBottomSheet(),
+                                );
+                              },
+                              icon: Icon(
+                                Icons.timer,
+                                color: isTimerActive ? Colors.green : Colors.grey[400],
+                              ),
                             );
                           },
-                          icon: Icon(
-                            Icons.timer,
-                            color: Colors.grey[400],
-                          ),
                         ),
                       ],
                     ),

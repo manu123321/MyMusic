@@ -1,124 +1,223 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
-import '../services/custom_audio_handler.dart';
-import '../models/playback_settings.dart';
 
-class SleepTimerDialog extends ConsumerStatefulWidget {
-  const SleepTimerDialog({super.key});
+class SleepTimerBottomSheet extends ConsumerWidget {
+  const SleepTimerBottomSheet({super.key});
 
   @override
-  ConsumerState<SleepTimerDialog> createState() => _SleepTimerDialogState();
-}
-
-class _SleepTimerDialogState extends ConsumerState<SleepTimerDialog> {
-  int _selectedMinutes = 30;
-  final List<int> _presetMinutes = [5, 10, 15, 30, 45, 60, 90, 120];
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.grey[900],
-      title: const Text(
-        'Sleep Timer',
-        style: TextStyle(color: Colors.white),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    return Container(
+      height: screenHeight * 0.5, // 50% of screen height
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: [
-          const Text(
-            'Stop playback after:',
-            style: TextStyle(color: Colors.white),
-          ),
-          const SizedBox(height: 16),
-          
-          // Preset buttons
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _presetMinutes.map((minutes) {
-              final isSelected = _selectedMinutes == minutes;
-              return ChoiceChip(
-                label: Text(
-                  '${minutes}m',
-                  style: TextStyle(
-                    color: isSelected ? Colors.black : Colors.white,
-                    fontSize: 12,
-                  ),
-                ),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedMinutes = minutes;
-                  });
-                },
-                backgroundColor: Colors.grey[800],
-                selectedColor: Colors.green,
-              );
-            }).toList(),
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[600],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           
-          const SizedBox(height: 16),
-          
-          // Custom time input
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Custom (minutes)',
-                    labelStyle: TextStyle(color: Colors.grey),
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    final minutes = int.tryParse(value);
-                    if (minutes != null && minutes > 0) {
-                      setState(() {
-                        _selectedMinutes = minutes;
-                      });
-                    }
-                  },
-                ),
+          // Title
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'Sleep Timer',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
               ),
-            ],
+            ),
+          ),
+          
+          // Sleep timer options
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildTimerOption(context, ref, '5 minutes', 5),
+                _buildTimerOption(context, ref, '10 minutes', 10),
+                _buildTimerOption(context, ref, '15 minutes', 15),
+                _buildTimerOption(context, ref, '30 minutes', 30),
+                _buildTimerOption(context, ref, '45 minutes', 45),
+                _buildTimerOption(context, ref, '1 hour', 60),
+                _buildEndOfTrackOption(context, ref),
+              ],
+            ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+    );
+  }
+
+  Widget _buildTimerOption(BuildContext context, WidgetRef ref, String label, int minutes) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _setTimer(context, ref, minutes, label);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
         ),
-        TextButton(
-          onPressed: () {
-            final audioHandler = ref.read(audioHandlerProvider);
-            (audioHandler as CustomAudioHandler).startSleepTimer(_selectedMinutes);
+      ),
+    );
+  }
+
+  Widget _buildEndOfTrackOption(BuildContext context, WidgetRef ref) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _setEndOfTrackTimer(context, ref);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Text(
+            'End of track',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setTimer(BuildContext context, WidgetRef ref, int minutes, String label) async {
+    final audioHandler = ref.read(audioHandlerProvider);
+    await audioHandler.startSleepTimer(minutes);
+    
+    // Update the playback settings provider to reflect the timer state
+    final playbackSettingsNotifier = ref.read(playbackSettingsProvider.notifier);
+    await playbackSettingsNotifier.setSleepTimerEnabled(true);
+    await playbackSettingsNotifier.setSleepTimerDuration(minutes);
+    
+    if (context.mounted) {
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Your sleep timer is set for $label',
+            style: const TextStyle(color: Colors.black),
+          ),
+          backgroundColor: Colors.white,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _setEndOfTrackTimer(BuildContext context, WidgetRef ref) async {
+    final audioHandler = ref.read(audioHandlerProvider);
+    final currentSong = ref.read(currentSongProvider).value;
+    
+    if (currentSong?.duration != null) {
+      // Get current position and calculate remaining time
+      try {
+        final positionStream = audioHandler.positionStream;
+        if (positionStream == null) {
+          throw Exception('Position stream not available');
+        }
+        final currentPosition = await positionStream.first;
+        final remainingDuration = currentSong!.duration! - currentPosition;
+        final remainingMinutes = remainingDuration.inMinutes;
+        
+        if (remainingMinutes > 0) {
+          await audioHandler.startSleepTimer(remainingMinutes);
+          
+          // Update the playback settings provider to reflect the timer state
+          final playbackSettingsNotifier = ref.read(playbackSettingsProvider.notifier);
+          await playbackSettingsNotifier.setSleepTimerEnabled(true);
+          await playbackSettingsNotifier.setSleepTimerDuration(remainingMinutes);
+          
+          if (context.mounted) {
             Navigator.pop(context);
             
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Sleep timer set for $_selectedMinutes minutes'),
-                backgroundColor: Colors.green,
-                action: SnackBarAction(
-                  label: 'Cancel',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    (audioHandler as CustomAudioHandler).cancelSleepTimer();
-                  },
+                content: const Text(
+                  'Your sleep timer is set to end of track',
+                  style: TextStyle(color: Colors.black),
+                ),
+                backgroundColor: Colors.white,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             );
-          },
-          child: const Text('Set Timer', style: TextStyle(color: Colors.green)),
+          }
+        } else {
+          if (context.mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Track is almost finished'),
+                backgroundColor: Colors.orange,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Unable to get current position'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          );
+        }
+      }
+    } else {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Unable to determine track duration'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
-      ],
-    );
+      );
+    }
   }
 }
