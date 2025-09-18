@@ -468,7 +468,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
               ),
             ),
           
-          // Play/Pause button with enhanced tap area
+          // Play/Pause button - simple and clean
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 4),
             child: StreamBuilder<PlaybackState>(
@@ -476,44 +476,21 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
               builder: (context, snapshot) {
                 final playbackState = snapshot.data;
                 final isPlaying = playbackState?.playing ?? false;
-                return Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(28),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(28),
-                    onTap: () {
-                      HapticFeedback.mediumImpact();
-                      if (isPlaying) {
-                        audioHandler.pause();
-                      } else {
-                        audioHandler.play();
-                      }
-                    },
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.15),
-                        border: Border.all(
-                          color: const Color(0xFF00E676).withOpacity(0.4),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
+                return IconButton(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    if (isPlaying) {
+                      audioHandler.pause();
+                    } else {
+                      audioHandler.play();
+                    }
+                  },
+                  icon: Icon(
+                    isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                    size: 28,
                   ),
+                  tooltip: isPlaying ? 'Pause' : 'Play',
                 );
               },
             ),
