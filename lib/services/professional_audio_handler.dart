@@ -214,14 +214,13 @@ class ProfessionalAudioHandler extends BaseAudioHandler
   void _handleSongCompletion() {
     _loggingService.logInfo('Song completed: ${_currentSong?.title ?? "Unknown"}');
     
-    // CIRCULAR NAVIGATION: Song completion follows same circular logic
-    // just_audio will automatically advance to next index, which is perfect for our circular queue
-    // The circular queue is already built with all songs, so natural progression works
+    // just_audio handles progression based on LoopMode we set:
+    // - LoopMode.off: Stops after last song
+    // - LoopMode.all: Continues to first song after last
+    // - LoopMode.one: Repeats current song
+    // No manual intervention needed - the player respects our repeat mode settings
     
-    final nextIndex = (_currentIndex + 1) % _queue.length;
-    _loggingService.logInfo('CIRCULAR COMPLETION: ${_queue[_currentIndex].title} → ${_queue[nextIndex].title} (automatic)');
-    
-    // No need to add more songs - circular queue contains all songs already
+    _loggingService.logInfo('Automatic progression handled by just_audio LoopMode: ${_settings.repeatMode}');
   }
 
   Future<void> _loadSettings() async {
@@ -476,10 +475,29 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         return;
       }
       
-      // CIRCULAR NAVIGATION: Forward (follows home screen order)
-      final nextIndex = (_currentIndex + 1) % _queue.length; // Circular wrap-around
+      final currentIndex = _currentIndex;
+      final isLastSong = currentIndex == _queue.length - 1;
       
-      _loggingService.logInfo('CIRCULAR FORWARD: ${_queue[_currentIndex].title} → ${_queue[nextIndex].title} ($_currentIndex → $nextIndex)');
+      // Respect repeat mode for manual skip
+      if (isLastSong && _settings.repeatMode == RepeatMode.none) {
+        // At last song with no repeat - stop playback
+        _loggingService.logInfo('SKIP NEXT: At last song with no repeat - stopping playback');
+        await stop();
+        return;
+      }
+      
+      // Calculate next index based on repeat mode
+      int nextIndex;
+      if (_settings.repeatMode == RepeatMode.one) {
+        // Repeat one - stay on current song
+        nextIndex = currentIndex;
+        _loggingService.logInfo('SKIP NEXT: Repeat one - staying on current song');
+      } else {
+        // Repeat all or normal progression
+        nextIndex = isLastSong ? 0 : currentIndex + 1;
+        final behavior = _settings.repeatMode == RepeatMode.all ? 'REPEAT ALL' : 'NORMAL';
+        _loggingService.logInfo('SKIP NEXT ($behavior): ${_queue[currentIndex].title} → ${_queue[nextIndex].title} ($currentIndex → $nextIndex)');
+      }
       
       await _player.seek(Duration.zero, index: nextIndex);
       
@@ -497,10 +515,29 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         return;
       }
       
-      // CIRCULAR NAVIGATION: Backward (follows reverse home screen order)
-      final prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length; // Circular wrap-around
+      final currentIndex = _currentIndex;
+      final isFirstSong = currentIndex == 0;
       
-      _loggingService.logInfo('CIRCULAR BACKWARD: ${_queue[_currentIndex].title} → ${_queue[prevIndex].title} ($_currentIndex → $prevIndex)');
+      // Respect repeat mode for manual skip
+      if (isFirstSong && _settings.repeatMode == RepeatMode.none) {
+        // At first song with no repeat - stay on first song or restart it
+        _loggingService.logInfo('SKIP PREVIOUS: At first song with no repeat - restarting current song');
+        await _player.seek(Duration.zero);
+        return;
+      }
+      
+      // Calculate previous index based on repeat mode
+      int prevIndex;
+      if (_settings.repeatMode == RepeatMode.one) {
+        // Repeat one - stay on current song
+        prevIndex = currentIndex;
+        _loggingService.logInfo('SKIP PREVIOUS: Repeat one - staying on current song');
+      } else {
+        // Repeat all or normal progression
+        prevIndex = isFirstSong ? _queue.length - 1 : currentIndex - 1;
+        final behavior = _settings.repeatMode == RepeatMode.all ? 'REPEAT ALL' : 'NORMAL';
+        _loggingService.logInfo('SKIP PREVIOUS ($behavior): ${_queue[currentIndex].title} → ${_queue[prevIndex].title} ($currentIndex → $prevIndex)');
+      }
       
       await _player.seek(Duration.zero, index: prevIndex);
       
