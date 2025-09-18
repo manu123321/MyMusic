@@ -10,7 +10,6 @@ import '../models/playlist.dart';
 import '../services/custom_audio_handler.dart';
 import '../services/storage_service.dart';
 import '../services/logging_service.dart';
-import 'settings_screen.dart';
 import 'now_playing_screen.dart';
 import 'playlist_screen.dart';
 
@@ -150,30 +149,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const PlaylistScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.playlist_play, color: Colors.white),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const PlaylistScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.library_music, color: Colors.white, size: 20),
+                label: const Text(
+                  'Your Library',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
                   ),
-                IconButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.settings, color: Colors.white),
                 ),
-              ],
-            ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
             ],
           ),
                     const SizedBox(height: 16),
