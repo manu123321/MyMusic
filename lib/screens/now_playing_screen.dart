@@ -8,6 +8,7 @@ import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../services/logging_service.dart';
 import '../widgets/sleep_timer_dialog.dart';
+import '../widgets/queue_panel.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});
@@ -26,7 +27,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   final LoggingService _loggingService = LoggingService();
   
   bool _showLyrics = false;
-  bool _showQueue = false;
   bool _showEqualizer = false;
   bool _isDraggingSlider = false;
   Duration _sliderPosition = Duration.zero;
@@ -466,14 +466,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         ),
                         IconButton(
                           onPressed: () {
-                            setState(() {
-                              _showQueue = !_showQueue;
-                            });
+                            _showQueueModal();
                           },
                           icon: Icon(
                             Icons.queue_music,
-                            color: _showQueue ? Colors.green : Colors.grey[400],
+                            color: Colors.grey[400],
                           ),
+                          tooltip: 'Queue',
                         ),
                         IconButton(
                           onPressed: () {
@@ -582,8 +581,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               ),
             ),
 
-            // Lyrics, Queue, or Equalizer panel
-            if (_showLyrics || _showQueue || _showEqualizer)
+            // Lyrics or Equalizer panel
+            if (_showLyrics || _showEqualizer)
               Expanded(
                 flex: 2,
                 child: Container(
@@ -596,9 +595,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     child: Text(
                       _showLyrics 
                           ? 'Lyrics coming soon' 
-                          : _showQueue 
-                              ? 'Queue panel coming soon'
-                              : 'Equalizer coming soon',
+                          : 'Equalizer coming soon',
                       style: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 16,
@@ -761,6 +758,49 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         ),
       );
     }
+  }
+  
+  void _showQueueModal() {
+    HapticFeedback.lightImpact();
+    _loggingService.logInfo('Opening queue modal');
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[600],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Queue content
+              const Expanded(
+                child: QueuePanel(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

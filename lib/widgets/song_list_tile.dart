@@ -380,6 +380,14 @@ class _SongListTileState extends ConsumerState<SongListTile>
               },
             ),
             _buildOptionTile(
+              icon: Icons.queue_music,
+              title: 'Add to queue',
+              onTap: () {
+                Navigator.pop(context);
+                _addToQueue();
+              },
+            ),
+            _buildOptionTile(
               icon: Icons.playlist_add,
               title: 'Add to playlist',
               onTap: () {
@@ -748,6 +756,42 @@ class _SongListTileState extends ConsumerState<SongListTile>
         ],
       ),
     );
+  }
+
+  void _addToQueue() {
+    try {
+      HapticFeedback.lightImpact();
+      
+      final audioHandler = ref.read(audioHandlerProvider);
+      
+      // Convert song to MediaItem
+      final mediaItem = MediaItem(
+        id: widget.song.filePath,
+        title: widget.song.title,
+        artist: widget.song.artist,
+        album: widget.song.album,
+        duration: Duration(milliseconds: widget.song.duration),
+        artUri: widget.song.albumArtPath != null ? Uri.file(widget.song.albumArtPath!) : null,
+        extras: {
+          'songId': widget.song.id,
+          'trackNumber': widget.song.trackNumber,
+          'year': widget.song.year,
+          'genre': widget.song.genre,
+          'isFavorite': widget.song.isFavorite,
+          'rating': widget.song.rating,
+        },
+      );
+      
+      // Add to queue
+      audioHandler.addQueueItem(mediaItem);
+      
+      _loggingService.logInfo('Added song to queue: ${widget.song.title}');
+      
+      _showSuccessSnackBar('♪ Added "${widget.song.title}" to queue');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error adding song to queue', e, stackTrace);
+      _showErrorSnackBar('Failed to add song to queue');
+    }
   }
 
   void _showSuccessSnackBar(String message) {

@@ -406,11 +406,34 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
 
   void _jumpToSong(int index, audioHandler) {
     try {
-      // TODO: Implement jump to song functionality
+      audioHandler.skipToQueueItem(index);
       _loggingService.logInfo('Jumping to song at index $index');
       HapticFeedback.selectionClick();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Jumped to selected song'),
+          backgroundColor: Colors.green[700],
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1500),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
     } catch (e, stackTrace) {
       _loggingService.logError('Error jumping to song', e, stackTrace);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to jump to song'),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
     }
   }
 
@@ -436,15 +459,23 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
 
   void _shuffleQueue() {
     try {
-      // TODO: Implement queue shuffle functionality
+      final audioHandler = ref.read(audioHandlerProvider);
+      audioHandler.setShuffleModeEnabled(true);
       _loggingService.logInfo('Shuffling queue');
       HapticFeedback.mediumImpact();
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Queue shuffled'),
+          content: const Row(
+            children: [
+              Icon(Icons.shuffle, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text('Queue shuffled'),
+            ],
+          ),
           backgroundColor: Colors.green[700],
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 2000),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -452,6 +483,17 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       );
     } catch (e, stackTrace) {
       _loggingService.logError('Error shuffling queue', e, stackTrace);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to shuffle queue'),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
     }
   }
 
