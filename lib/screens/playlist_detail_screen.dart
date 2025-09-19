@@ -56,7 +56,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
     
     _headerHeightAnimation = Tween<double>(
       begin: 1.0,
-      end: 0.1,
+      end: 0.05,
     ).animate(CurvedAnimation(
       parent: _headerAnimationController,
       curve: Curves.easeInOut,
@@ -121,7 +121,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
         slivers: [
           // App bar with playlist info
           SliverAppBar(
-            expandedHeight: _isSearchFocused ? 80 : 300,
+            expandedHeight: _isSearchFocused ? 30 : 300,
             pinned: true,
             backgroundColor: Colors.black,
             leading: IconButton(
@@ -330,9 +330,12 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
           
           // Songs list
           SliverToBoxAdapter(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              transform: Matrix4.translationValues(0, _isSearchFocused ? -20 : 0, 0),
               margin: EdgeInsets.only(top: _isSearchFocused ? 0 : 16),
-              child: _isLoading
+                child: _isLoading
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32.0),
