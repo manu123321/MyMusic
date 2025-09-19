@@ -191,27 +191,25 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                     Expanded(
                       child: GestureDetector(
                         onHorizontalDragStart: (details) {
-                          setState(() {
-                            _isSwipeInProgress = true;
-                          });
+                          _isSwipeInProgress = true;
                         },
                         onHorizontalDragUpdate: (details) {
                           if (_isSwipeInProgress) {
-                            // Update swipe animation based on drag
+                            // Very subtle visual feedback - just slight movement
                             final screenWidth = MediaQuery.of(context).size.width;
-                            final dragDistance = details.localPosition.dx;
-                            final progress = (dragDistance / screenWidth).abs().clamp(0.0, 0.3);
+                            final dragDistance = details.delta.dx;
                             
-                            // Only update if the drag is significant enough to prevent accidental triggers
-                            if (dragDistance.abs() > 10) {
-                              _swipeController.value = progress;
-                              
-                              // Update animation offset with resistance for better feel
-                              final resistance = 0.5; // Add resistance like iOS
+                            // Minimal visual feedback for smooth experience
+                            if (dragDistance.abs() > 1) {
+                              final resistance = 0.08; // Very subtle movement
                               _swipeAnimation = Tween<Offset>(
                                 begin: Offset.zero,
                                 end: Offset((dragDistance / screenWidth) * resistance, 0),
-                              ).animate(_swipeController);
+                              ).animate(AlwaysStoppedAnimation(1.0));
+                              
+                              if (mounted) {
+                                setState(() {});
+                              }
                             }
                           }
                         },
@@ -317,56 +315,6 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                                 ),
                               ),
                               
-                              // Swipe indicator overlay
-                              if (_isSwipeInProgress)
-                                Positioned.fill(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: AnimatedBuilder(
-                                      animation: _swipeController,
-                                      builder: (context, child) {
-                                        final progress = _swipeController.value;
-                                        final isSwipeRight = _swipeAnimation.value.dx > 0;
-                                        
-                                        return Center(
-                                          child: AnimatedOpacity(
-                                            opacity: progress * 3, // Make it more visible
-                                            duration: const Duration(milliseconds: 100),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(0.7),
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    isSwipeRight ? Icons.skip_previous : Icons.skip_next,
-                                                    color: Colors.white,
-                                                    size: 20,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    isSwipeRight ? 'Previous' : 'Next',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -674,37 +622,34 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
   
   void _handleSwipeEnd(DragEndDetails details, audioHandler) {
     final velocity = details.primaryVelocity ?? 0;
-    const swipeThreshold = 50.0; // Lower threshold for better responsiveness
+    const swipeThreshold = 150.0; // Optimized threshold for responsiveness
     
-    // Reset animation first
-    _swipeController.reverse().then((_) {
-      _swipeAnimation = Tween<Offset>(
-        begin: Offset.zero,
-        end: Offset.zero,
-      ).animate(_swipeController);
-      
-      setState(() {
-        _isSwipeInProgress = false;
-      });
-    });
+    // Reset animation smoothly
+    _swipeAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(AlwaysStoppedAnimation(1.0));
     
-    // Only process swipe if velocity is significant enough
+    _isSwipeInProgress = false;
+    
+    if (mounted) {
+      setState(() {});
+    }
+    
+    // Process swipe with optimized threshold
     if (velocity.abs() < swipeThreshold) {
-      setState(() {
-        _isSwipeInProgress = false;
-      });
       return;
     }
     
     try {
       if (velocity > 0) {
         // Swipe right - Previous song
-        HapticFeedback.mediumImpact();
+        HapticFeedback.lightImpact(); // Light haptic for smooth feel
         audioHandler.skipToPrevious();
         _loggingService.logInfo('Swipe right - Previous song');
       } else {
         // Swipe left - Next song  
-        HapticFeedback.mediumImpact();
+        HapticFeedback.lightImpact(); // Light haptic for smooth feel
         audioHandler.skipToNext();
         _loggingService.logInfo('Swipe left - Next song');
       }

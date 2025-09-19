@@ -22,13 +22,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   late AnimationController _albumArtController;
   late AnimationController _progressController;
   late AnimationController _slideController;
+  late AnimationController _swipeController;
   late Animation<Offset> _slideAnimation;
+  late Animation<Offset> _swipeAnimation;
   
   final LoggingService _loggingService = LoggingService();
   
   bool _showLyrics = false;
   bool _showEqualizer = false;
   bool _isDraggingSlider = false;
+  bool _isSwipeInProgress = false;
   Duration _sliderPosition = Duration.zero;
 
   @override
@@ -51,11 +54,24 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       vsync: this,
     );
     
+    _swipeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    _swipeAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _swipeController,
       curve: Curves.easeOutCubic,
     ));
     
@@ -75,6 +91,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _albumArtController.dispose();
     _progressController.dispose();
     _slideController.dispose();
+    _swipeController.dispose();
     super.dispose();
   }
   
@@ -156,16 +173,45 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       body: GestureDetector(
-        onTap: () {}, // Absorb taps to prevent gesture conflicts
-        onPanDown: (_) {}, // Absorb pan gestures
-        onLongPress: () {}, // Absorb long press gestures
-        behavior: HitTestBehavior.opaque, // CRITICAL: Block all gestures from reaching underlying widgets
+        onHorizontalDragStart: (details) {
+          _isSwipeInProgress = true;
+        },
+        onHorizontalDragUpdate: (details) {
+          if (_isSwipeInProgress) {
+            // Subtle visual feedback without indicators - just slight movement
+            final screenWidth = MediaQuery.of(context).size.width;
+            final dragDistance = details.delta.dx;
+            
+            // Only provide minimal visual feedback for significant drags
+            if (dragDistance.abs() > 2) {
+              final resistance = 0.15; // Very subtle resistance
+              _swipeAnimation = Tween<Offset>(
+                begin: Offset.zero,
+                end: Offset((dragDistance / screenWidth) * resistance, 0),
+              ).animate(AlwaysStoppedAnimation(1.0));
+              
+              if (mounted) {
+                setState(() {});
+              }
+            }
+          }
+        },
+        onHorizontalDragEnd: (details) {
+          if (_isSwipeInProgress) {
+            _handleSwipeEnd(details, ref.read(audioHandlerProvider));
+          }
+        },
+        behavior: HitTestBehavior.opaque,
         child: Container(
         decoration: _buildBackgroundGradient(currentSong),
         child: SafeArea(
           child: SlideTransition(
             position: _slideAnimation,
-            child: Column(
+            child: SlideTransition(
+              position: _swipeAnimation,
+              child: Stack(
+                children: [
+                  Column(
               children: [
                 // Header with blur effect
                 ClipRRect(
@@ -622,7 +668,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               ),
             ),
 
-            // Lyrics or Equalizer panel
+              // Lyrics or Equalizer panel
             if (_showLyrics || _showEqualizer)
               Expanded(
                 flex: 2,
@@ -646,6 +692,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 ),
               ),
               ],
+            ),
+                  
+                ],
+              ),
             ),
           ),
         ),
@@ -869,6 +919,44 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         ),
       ),
     );
+  }
+  
+  void _handleSwipeEnd(DragEndDetails details, audioHandler) {
+    final velocity = details.primaryVelocity ?? 0;
+    const swipeThreshold = 200.0; // Lower threshold for better responsiveness
+    
+    // Reset animation smoothly
+    _swipeAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(AlwaysStoppedAnimation(1.0));
+    
+    _isSwipeInProgress = false;
+    
+    if (mounted) {
+      setState(() {});
+    }
+    
+    // Process swipe with lower threshold for better UX
+    if (velocity.abs() < swipeThreshold) {
+      return;
+    }
+    
+    try {
+      if (velocity > 0) {
+        // Swipe right - Previous song
+        HapticFeedback.lightImpact(); // Lighter haptic for smoother feel
+        audioHandler.skipToPrevious();
+        _loggingService.logInfo('Swipe right - Previous song');
+      } else {
+        // Swipe left - Next song  
+        HapticFeedback.lightImpact(); // Lighter haptic for smoother feel
+        audioHandler.skipToNext();
+        _loggingService.logInfo('Swipe left - Next song');
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error handling swipe gesture', e, stackTrace);
+    }
   }
 }
 
