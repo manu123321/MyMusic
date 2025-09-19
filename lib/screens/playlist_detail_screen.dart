@@ -304,8 +304,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     // TODO: Implement edit playlist functionality
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Edit playlist functionality coming soon'),
-        backgroundColor: Colors.orange,
+        content: Text('Edit playlist functionality coming soon', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
       ),
     );
   }
@@ -335,8 +335,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
               Navigator.pop(context); // Go back to playlists screen
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Playlist deleted'),
-                  backgroundColor: Colors.red,
+                  content: Text('Playlist deleted', style: TextStyle(color: Colors.black)),
+                  backgroundColor: Colors.white,
                 ),
               );
             },
@@ -454,8 +454,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Removed "${song.title}" from playlist'),
-        backgroundColor: Colors.orange,
+        content: Text('Removed "${song.title}" from playlist', style: const TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
       ),
     );
   }
@@ -495,8 +495,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error playing playlist: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Error playing playlist: $e', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
         ),
       );
     }
@@ -540,8 +540,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error shuffling playlist: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Error shuffling playlist: $e', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
         ),
       );
     }
@@ -585,8 +585,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error playing song: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Error playing song: $e', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
         ),
       );
     }

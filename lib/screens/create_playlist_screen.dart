@@ -245,8 +245,8 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Playlist "$name" created successfully'),
-            backgroundColor: Colors.green[700],
+            content: Text('Playlist "$name" created successfully', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -260,15 +260,15 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error creating playlist: ${_getDisplayError(e)}'),
-            backgroundColor: Colors.red[700],
+            content: Text('Error creating playlist: ${_getDisplayError(e)}', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
             action: SnackBarAction(
               label: 'Retry',
-              textColor: Colors.white,
+              textColor: Colors.black,
               onPressed: _createPlaylist,
             ),
           ),

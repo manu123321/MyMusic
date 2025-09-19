@@ -552,8 +552,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red[700],
+          content: Text(message, style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),

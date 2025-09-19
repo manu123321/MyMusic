@@ -215,8 +215,8 @@ class SleepTimerBottomSheet extends ConsumerWidget {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Track is almost finished'),
-                backgroundColor: Colors.orange,
+                content: const Text('Track is almost finished', style: TextStyle(color: Colors.black)),
+                backgroundColor: Colors.white,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -230,8 +230,8 @@ class SleepTimerBottomSheet extends ConsumerWidget {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Unable to get current position'),
-              backgroundColor: Colors.red,
+              content: const Text('Unable to get current position', style: TextStyle(color: Colors.black)),
+              backgroundColor: Colors.white,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -244,8 +244,8 @@ class SleepTimerBottomSheet extends ConsumerWidget {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Unable to determine track duration'),
-          backgroundColor: Colors.red,
+          content: const Text('Unable to determine track duration', style: TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),

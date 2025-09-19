@@ -774,8 +774,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
-          backgroundColor: color,
+          content: Text(message, style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),

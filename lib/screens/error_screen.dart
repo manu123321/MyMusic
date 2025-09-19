@@ -409,8 +409,8 @@ ${_recentLogs.map((log) => '${log.level.name.toUpperCase()}: ${log.message}').jo
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Error details copied to clipboard'),
-        backgroundColor: Colors.green[700],
+        content: const Text('Error details copied to clipboard', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),

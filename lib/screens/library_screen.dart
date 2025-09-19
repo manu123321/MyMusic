@@ -505,8 +505,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       print('Error playing song: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error playing song: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Error playing song: $e', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
         ),
       );
     }

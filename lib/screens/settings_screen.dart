@@ -625,12 +625,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.white),
+              const Icon(Icons.check_circle, color: Colors.black),
               const SizedBox(width: 8),
-              Expanded(child: Text(message)),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.black))),
             ],
           ),
-          backgroundColor: Colors.green[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -646,12 +646,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.white),
+              const Icon(Icons.error_outline, color: Colors.black),
               const SizedBox(width: 8),
-              Expanded(child: Text(message)),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.black))),
             ],
           ),
-          backgroundColor: Colors.red[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -667,12 +667,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.info_outline, color: Colors.white),
+              const Icon(Icons.info_outline, color: Colors.black),
               const SizedBox(width: 8),
-              Expanded(child: Text(message)),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.black))),
             ],
           ),
-          backgroundColor: Colors.orange[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),

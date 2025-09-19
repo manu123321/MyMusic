@@ -412,8 +412,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Jumped to selected song'),
-          backgroundColor: Colors.green[700],
+          content: const Text('Jumped to selected song', style: TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
           shape: RoundedRectangleBorder(
@@ -426,8 +426,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Failed to jump to song'),
-          backgroundColor: Colors.red[700],
+          content: const Text('Failed to jump to song', style: TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -444,8 +444,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Removed "${song.title}" from queue'),
-          backgroundColor: Colors.orange[700],
+          content: Text('Removed "${song.title}" from queue', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -468,12 +468,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         SnackBar(
           content: const Row(
             children: [
-              Icon(Icons.shuffle, color: Colors.white, size: 18),
+              Icon(Icons.shuffle, color: Colors.black, size: 18),
               SizedBox(width: 8),
-              Text('Queue shuffled'),
+              Text('Queue shuffled', style: TextStyle(color: Colors.black)),
             ],
           ),
-          backgroundColor: Colors.green[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 2000),
           shape: RoundedRectangleBorder(
@@ -486,8 +486,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Failed to shuffle queue'),
-          backgroundColor: Colors.red[700],
+          content: const Text('Failed to shuffle queue', style: TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -551,12 +551,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         SnackBar(
           content: const Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
+              Icon(Icons.check_circle, color: Colors.black),
               SizedBox(width: 8),
-              Text('Queue cleared'),
+              Text('Queue cleared', style: TextStyle(color: Colors.black)),
             ],
           ),
-          backgroundColor: Colors.orange[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -570,12 +570,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         SnackBar(
           content: const Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.white),
+              Icon(Icons.error_outline, color: Colors.black),
               SizedBox(width: 8),
-              Text('Failed to clear queue'),
+              Text('Failed to clear queue', style: TextStyle(color: Colors.black)),
             ],
           ),
-          backgroundColor: Colors.red[700],
+          backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
