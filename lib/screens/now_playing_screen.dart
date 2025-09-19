@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,9 +21,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   late AnimationController _albumArtController;
   late AnimationController _progressController;
   late AnimationController _slideController;
-  late AnimationController _swipeController;
   late Animation<Offset> _slideAnimation;
-  late Animation<Offset> _swipeAnimation;
   
   final LoggingService _loggingService = LoggingService();
   
@@ -32,6 +29,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   bool _showEqualizer = false;
   bool _isDraggingSlider = false;
   bool _isSwipeInProgress = false;
+  double _swipeProgress = 0.0;
+  double _swipeDirection = 0.0; // -1 for left (next), 1 for right (previous)
+  MediaItem? _nextSong;
+  MediaItem? _previousSong;
   Duration _sliderPosition = Duration.zero;
 
   @override
@@ -54,24 +55,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       vsync: this,
     );
     
-    _swipeController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
-    
-    _swipeAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _swipeController,
       curve: Curves.easeOutCubic,
     ));
     
@@ -91,7 +79,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _albumArtController.dispose();
     _progressController.dispose();
     _slideController.dispose();
-    _swipeController.dispose();
     super.dispose();
   }
   
@@ -173,29 +160,49 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       body: GestureDetector(
-        onHorizontalDragStart: (details) {
-          _isSwipeInProgress = true;
-        },
-        onHorizontalDragUpdate: (details) {
-          if (_isSwipeInProgress) {
-            // Subtle visual feedback without indicators - just slight movement
-            final screenWidth = MediaQuery.of(context).size.width;
-            final dragDistance = details.delta.dx;
-            
-            // Only provide minimal visual feedback for significant drags
-            if (dragDistance.abs() > 2) {
-              final resistance = 0.15; // Very subtle resistance
-              _swipeAnimation = Tween<Offset>(
-                begin: Offset.zero,
-                end: Offset((dragDistance / screenWidth) * resistance, 0),
-              ).animate(AlwaysStoppedAnimation(1.0));
-              
-              if (mounted) {
-                setState(() {});
-              }
-            }
-          }
-        },
+         onHorizontalDragStart: (details) {
+           _isSwipeInProgress = true;
+           _swipeProgress = 0.0;
+           _swipeDirection = 0.0;
+           
+           // Pre-load adjacent songs for smooth experience
+           _nextSong = _getNextSong();
+           _previousSong = _getPreviousSong();
+         },
+         onHorizontalDragUpdate: (details) {
+           if (_isSwipeInProgress) {
+             final screenWidth = MediaQuery.of(context).size.width;
+             final albumArtSize = 300.0; // Album art size
+             final centerX = screenWidth / 2;
+             final currentX = details.localPosition.dx;
+             final dragDistance = currentX - centerX;
+             
+             // Calculate progress based on album art width (more intuitive)
+             final maxDragDistance = albumArtSize * 0.8; // 80% of album art width for full transition
+             final progress = (dragDistance.abs() / maxDragDistance).clamp(0.0, 1.0);
+             
+             // Determine direction: negative = left (next), positive = right (previous)
+             final direction = dragDistance < 0 ? -1.0 : 1.0;
+             
+             // Only proceed if we have an adjacent song in that direction
+             final hasAdjacentSong = direction < 0 ? _nextSong != null : _previousSong != null;
+             
+             if (hasAdjacentSong && dragDistance.abs() > 10) {
+               _swipeProgress = progress;
+               _swipeDirection = direction;
+               
+               // Store swipe state for rendering
+             } else {
+               // Reset if no adjacent song or minimal drag
+               _swipeProgress = 0.0;
+               _swipeDirection = 0.0;
+             }
+             
+             if (mounted) {
+               setState(() {});
+             }
+           }
+         },
         onHorizontalDragEnd: (details) {
           if (_isSwipeInProgress) {
             _handleSwipeEnd(details, ref.read(audioHandlerProvider));
@@ -203,22 +210,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         },
         behavior: HitTestBehavior.opaque,
         child: Container(
-        decoration: _buildBackgroundGradient(currentSong),
-        child: SafeArea(
-          child: SlideTransition(
-            position: _slideAnimation,
+          decoration: _buildBackgroundGradient(currentSong),
+          child: SafeArea(
             child: SlideTransition(
-              position: _swipeAnimation,
-              child: Stack(
-                children: [
-                  Column(
+            position: _slideAnimation,
+            child: Column(
               children: [
                 // Header with blur effect
                 ClipRRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -254,116 +257,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   ),
                 ),
 
-                // Album art
-                Expanded(
-                  flex: 3,
-                  child: Center(
-                child: Container(
-                  width: 300,
-                  height: 300,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-                  child: StreamBuilder<PlaybackState>(
-                    stream: audioHandler.playbackState,
-                    builder: (context, snapshot) {
-                      final playbackState = snapshot.data;
-                      final isPlaying = playbackState?.playing ?? false;
-                      
-                      // CRITICAL FIX: Control animation directly without postFrameCallback
-                      // This prevents the flicker caused by delayed animation updates
-                      if (isPlaying && !_albumArtController.isAnimating) {
-                        _albumArtController.repeat();
-                      } else if (!isPlaying && _albumArtController.isAnimating) {
-                        _albumArtController.stop();
-                      }
+                 // Swipeable Album Art Section
+                 Expanded(
+                   flex: 3,
+                   child: _buildSwipeableAlbumSection(currentSong),
+                 ),
 
-                      return AnimatedBuilder(
-                        animation: _albumArtController,
-                        builder: (context, child) {
-                          return Transform.rotate(
-                            angle: _albumArtController.value * 2 * 3.14159,
-                            child: child,
-                          );
-                        },
-                        child: ClipOval(
-                          child: currentSong.artUri != null
-                              ? Image.file(
-                                  File(currentSong.artUri!.toFilePath()),
-                                  width: 300,
-                                  height: 300,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 300,
-                                      height: 300,
-                                      color: Colors.grey[800],
-                                      child: const Icon(
-                                        Icons.music_note,
-                                        color: Colors.white,
-                                        size: 120,
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  width: 300,
-                                  height: 300,
-                                  color: Colors.grey[800],
-                                  child: const Icon(
-                                    Icons.music_note,
-                                    color: Colors.white,
-                                    size: 120,
-                                  ),
-                                ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-
-            // Song info
+            // Swipeable Song Info Section
             Expanded(
               flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      currentSong.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      currentSong.artist ?? '',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 18,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
+              child: _buildSwipeableSongInfo(currentSong),
             ),
 
             // Progress bar
@@ -391,7 +294,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 activeTrackColor: Colors.white,
                                 inactiveTrackColor: Colors.grey[600],
                                 thumbColor: Colors.white,
-                                overlayColor: Colors.white.withOpacity(0.2),
+                                overlayColor: Colors.white.withValues(alpha: 0.2),
                               ),
                               child: Slider(
                                 value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
@@ -638,11 +541,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: Colors.white,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.3),
-                                        blurRadius: 20,
-                                        spreadRadius: 2,
+                                     boxShadow: [
+                                       BoxShadow(
+                                         color: Colors.black.withValues(alpha: 0.3),
+                                         blurRadius: 20,
+                                         spreadRadius: 2,
                                       ),
                                     ],
                                   ),
@@ -691,14 +594,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   ),
                 ),
               ),
-              ],
-            ),
-                  
-                ],
-              ),
+               ],
+             ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -921,42 +820,280 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     );
   }
   
-  void _handleSwipeEnd(DragEndDetails details, audioHandler) {
-    final velocity = details.primaryVelocity ?? 0;
-    const swipeThreshold = 200.0; // Lower threshold for better responsiveness
-    
-    // Reset animation smoothly
-    _swipeAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: Offset.zero,
-    ).animate(AlwaysStoppedAnimation(1.0));
-    
-    _isSwipeInProgress = false;
-    
-    if (mounted) {
-      setState(() {});
-    }
-    
-    // Process swipe with lower threshold for better UX
-    if (velocity.abs() < swipeThreshold) {
-      return;
-    }
-    
-    try {
-      if (velocity > 0) {
-        // Swipe right - Previous song
-        HapticFeedback.lightImpact(); // Lighter haptic for smoother feel
-        audioHandler.skipToPrevious();
-        _loggingService.logInfo('Swipe right - Previous song');
-      } else {
-        // Swipe left - Next song  
-        HapticFeedback.lightImpact(); // Lighter haptic for smoother feel
-        audioHandler.skipToNext();
-        _loggingService.logInfo('Swipe left - Next song');
-      }
-    } catch (e, stackTrace) {
-      _loggingService.logError('Error handling swipe gesture', e, stackTrace);
-    }
-  }
-}
+   void _handleSwipeEnd(DragEndDetails details, audioHandler) {
+     final velocity = details.primaryVelocity ?? 0;
+     const velocityThreshold = 300.0; // Velocity threshold for quick swipes
+     const progressThreshold = 0.5; // 50% progress threshold
+     
+     bool shouldChangeSong = false;
+     bool isNext = false;
+     
+     // Determine if we should change song based on progress or velocity
+     if (_swipeProgress >= progressThreshold) {
+       // 50% threshold reached - change song regardless of velocity
+       shouldChangeSong = true;
+       isNext = _swipeDirection < 0; // Left swipe = next song
+       HapticFeedback.mediumImpact(); // Stronger haptic for threshold crossing
+     } else if (velocity.abs() > velocityThreshold) {
+       // Fast swipe with sufficient velocity
+       shouldChangeSong = true;
+       isNext = velocity < 0; // Left swipe = next song
+       HapticFeedback.lightImpact(); // Light haptic for velocity-based change
+     }
+     
+     // Reset all swipe state
+     _isSwipeInProgress = false;
+     _swipeProgress = 0.0;
+     _swipeDirection = 0.0;
+     _nextSong = null;
+     _previousSong = null;
+     
+     if (mounted) {
+       setState(() {});
+     }
+     
+     // Execute song change if conditions are met
+     if (shouldChangeSong) {
+       try {
+         if (isNext) {
+           audioHandler.skipToNext();
+           _loggingService.logInfo('Changed to next song via swipe');
+         } else {
+           audioHandler.skipToPrevious();
+           _loggingService.logInfo('Changed to previous song via swipe');
+         }
+       } catch (e, stackTrace) {
+         _loggingService.logError('Error changing song via swipe', e, stackTrace);
+       }
+     }
+   }
+   
+   // Helper methods for peek functionality
+   MediaItem? _getNextSong() {
+     try {
+       final queue = ref.read(queueProvider).value ?? [];
+       final currentSong = ref.read(currentSongProvider).value;
+       
+       if (queue.isEmpty || currentSong == null) return null;
+       
+       final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+       if (currentIndex == -1 || currentIndex >= queue.length - 1) return null;
+       
+       return queue[currentIndex + 1];
+     } catch (e) {
+       _loggingService.logError('Error getting next song for peek', e);
+       return null;
+     }
+   }
+   
+   MediaItem? _getPreviousSong() {
+     try {
+       final queue = ref.read(queueProvider).value ?? [];
+       final currentSong = ref.read(currentSongProvider).value;
+       
+       if (queue.isEmpty || currentSong == null) return null;
+       
+       final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+       if (currentIndex <= 0) return null;
+       
+       return queue[currentIndex - 1];
+     } catch (e) {
+       _loggingService.logError('Error getting previous song for peek', e);
+       return null;
+     }
+   }
+   
+   Widget _buildAlbumArtWidget(MediaItem song, {required bool isCurrentSong}) {
+     return Container(
+       width: 300,
+       height: 300,
+       decoration: BoxDecoration(
+         shape: BoxShape.circle,
+         boxShadow: [
+           BoxShadow(
+             color: Colors.black.withValues(alpha: 0.3),
+             blurRadius: 20,
+             spreadRadius: 5,
+           ),
+         ],
+       ),
+       child: StreamBuilder<PlaybackState>(
+         stream: ref.read(audioHandlerProvider).playbackState,
+         builder: (context, snapshot) {
+           final playbackState = snapshot.data;
+           final isPlaying = playbackState?.playing ?? false;
+           
+           // Only animate rotation for current song when playing
+           if (isCurrentSong && isPlaying && !_albumArtController.isAnimating) {
+             _albumArtController.repeat();
+           } else if ((!isCurrentSong || !isPlaying) && _albumArtController.isAnimating) {
+             _albumArtController.stop();
+           }
+
+           Widget albumArt = ClipOval(
+             child: song.artUri != null
+                 ? Image.file(
+                     File(song.artUri!.toFilePath()),
+                     width: 300,
+                     height: 300,
+                     fit: BoxFit.cover,
+                     errorBuilder: (context, error, stackTrace) {
+                       return Container(
+                         width: 300,
+                         height: 300,
+                         color: Colors.grey[800],
+                         child: const Icon(
+                           Icons.music_note,
+                           color: Colors.white,
+                           size: 120,
+                         ),
+                       );
+                     },
+                   )
+                 : Container(
+                     width: 300,
+                     height: 300,
+                     color: Colors.grey[800],
+                     child: const Icon(
+                       Icons.music_note,
+                       color: Colors.white,
+                       size: 120,
+                     ),
+                   ),
+           );
+           
+           // Only rotate current song when playing
+           if (isCurrentSong) {
+             return AnimatedBuilder(
+               animation: _albumArtController,
+               builder: (context, child) {
+                 return Transform.rotate(
+                   angle: _albumArtController.value * 2 * 3.14159,
+                   child: child,
+                 );
+               },
+               child: albumArt,
+             );
+           }
+           
+           return albumArt;
+         },
+       ),
+     );
+   }
+   
+   Widget _buildSwipeableAlbumSection(MediaItem currentSong) {
+     return Center(
+       child: SizedBox(
+         width: 300,
+         height: 300,
+         child: Stack(
+           alignment: Alignment.center,
+           children: [
+             // Current album art (moves with swipe)
+             Transform.translate(
+               offset: Offset(_swipeDirection * _swipeProgress * 300, 0),
+               child: Opacity(
+                 opacity: 1.0 - (_swipeProgress * 0.4), // Fade out as adjacent song appears
+                 child: _buildAlbumArtWidget(currentSong, isCurrentSong: true),
+               ),
+             ),
+             
+             // Next song album art (slides in from right when swiping left)
+             if (_swipeProgress > 0 && _swipeDirection < 0 && _nextSong != null)
+               Transform.translate(
+                 offset: Offset(300 * (1.0 - _swipeProgress), 0),
+                 child: Opacity(
+                   opacity: _swipeProgress * 0.9,
+                   child: _buildAlbumArtWidget(_nextSong!, isCurrentSong: false),
+                 ),
+               ),
+             
+             // Previous song album art (slides in from left when swiping right)
+             if (_swipeProgress > 0 && _swipeDirection > 0 && _previousSong != null)
+               Transform.translate(
+                 offset: Offset(-300 * (1.0 - _swipeProgress), 0),
+                 child: Opacity(
+                   opacity: _swipeProgress * 0.9,
+                   child: _buildAlbumArtWidget(_previousSong!, isCurrentSong: false),
+                 ),
+               ),
+           ],
+         ),
+       ),
+     );
+   }
+   
+   Widget _buildSwipeableSongInfo(MediaItem currentSong) {
+     return Padding(
+       padding: const EdgeInsets.symmetric(horizontal: 32),
+       child: SizedBox(
+         height: 100,
+         child: Stack(
+           alignment: Alignment.center,
+           children: [
+             // Current song info (moves with swipe)
+             Transform.translate(
+               offset: Offset(_swipeDirection * _swipeProgress * 300, 0),
+               child: Opacity(
+                 opacity: 1.0 - (_swipeProgress * 0.4),
+                 child: _buildSongInfoWidget(currentSong),
+               ),
+             ),
+             
+             // Next song info (slides in from right when swiping left)
+             if (_swipeProgress > 0 && _swipeDirection < 0 && _nextSong != null)
+               Transform.translate(
+                 offset: Offset(300 * (1.0 - _swipeProgress), 0),
+                 child: Opacity(
+                   opacity: _swipeProgress * 0.9,
+                   child: _buildSongInfoWidget(_nextSong!),
+                 ),
+               ),
+             
+             // Previous song info (slides in from left when swiping right)
+             if (_swipeProgress > 0 && _swipeDirection > 0 && _previousSong != null)
+               Transform.translate(
+                 offset: Offset(-300 * (1.0 - _swipeProgress), 0),
+                 child: Opacity(
+                   opacity: _swipeProgress * 0.9,
+                   child: _buildSongInfoWidget(_previousSong!),
+                 ),
+               ),
+           ],
+         ),
+       ),
+     );
+   }
+   
+   Widget _buildSongInfoWidget(MediaItem song) {
+     return Column(
+       mainAxisAlignment: MainAxisAlignment.center,
+       children: [
+         Text(
+           song.title,
+           style: const TextStyle(
+             color: Colors.white,
+             fontSize: 24,
+             fontWeight: FontWeight.bold,
+           ),
+           textAlign: TextAlign.center,
+           maxLines: 2,
+           overflow: TextOverflow.ellipsis,
+         ),
+         const SizedBox(height: 8),
+         Text(
+           song.artist ?? '',
+           style: TextStyle(
+             color: Colors.grey[400],
+             fontSize: 18,
+           ),
+           textAlign: TextAlign.center,
+           maxLines: 1,
+           overflow: TextOverflow.ellipsis,
+         ),
+       ],
+     );
+   }
+ }
 
