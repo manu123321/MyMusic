@@ -75,6 +75,7 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
@@ -92,108 +93,117 @@ class _CreatePlaylistScreenState extends ConsumerState<CreatePlaylistScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-              
-              
-              
-              const SizedBox(height: 32),
-              
-              // Name input field with validation
-              Column(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height - 
+                         MediaQuery.of(context).padding.top - 
+                         kToolbarHeight - 
+                         MediaQuery.of(context).viewInsets.bottom - 
+                         48, // Account for padding
+            ),
+            child: IntrinsicHeight(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: _nameController,
-                    focusNode: _nameFocusNode,
-                    maxLength: _maxNameLength,
-                    textCapitalization: TextCapitalization.words,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Playlist name',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: _nameError != null ? Colors.red : Colors.grey[600]!,
-                          width: 1,
+                  const SizedBox(height: 40),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Name input field with validation
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        focusNode: _nameFocusNode,
+                        maxLength: _maxNameLength,
+                        textCapitalization: TextCapitalization.words,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: _nameError != null ? Colors.red : const Color(0xFF00E676),
-                          width: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Playlist name',
+                          hintStyle: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: _nameError != null ? Colors.red : Colors.grey[600]!,
+                              width: 1,
+                            ),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: _nameError != null ? Colors.red : const Color(0xFF00E676),
+                              width: 2,
+                            ),
+                          ),
+                          errorBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.red,
+                              width: 2,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 0,
+                            vertical: 16,
+                          ),
+                          counterStyle: TextStyle(color: Colors.grey[600]),
                         ),
+                        onChanged: (value) {
+                          setState(() {}); // Rebuild to update create button state
+                        },
                       ),
-                      errorBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: Colors.red,
-                          width: 2,
+                      if (_nameError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _nameError!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 0,
-                        vertical: 16,
-                      ),
-                      counterStyle: TextStyle(color: Colors.grey[600]),
-                    ),
-                    onChanged: (value) {
-                      setState(() {}); // Rebuild to update create button state
-                    },
+                      ],
+                    ],
                   ),
-                  if (_nameError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _nameError!,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                      ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Create button positioned on the right
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _canCreatePlaylist() && !_isCreating ? _createPlaylist : null,
+                      child: _isCreating
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              'Create',
+                              style: TextStyle(
+                                color: _canCreatePlaylist() ? const Color(0xFF00E676) : Colors.grey[500],
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
-                  ],
+                  ),
+                  
+                  const Spacer(),
                 ],
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Create button positioned on the right
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _canCreatePlaylist() && !_isCreating ? _createPlaylist : null,
-                  child: _isCreating
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Text(
-                          'Create',
-                          style: TextStyle(
-                            color: _canCreatePlaylist() ? const Color(0xFF00E676) : Colors.grey[500],
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
-              ),
-              
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),

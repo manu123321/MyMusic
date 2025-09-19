@@ -312,7 +312,7 @@ class _AddToPlaylistSheetState extends ConsumerState<AddToPlaylistSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Create your first playlist above',
+              'Create your first playlist',
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 14,

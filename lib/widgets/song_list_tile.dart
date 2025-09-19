@@ -405,7 +405,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
               },
             ),
             _buildOptionTile(
-              icon: Icons.delete_outline,
+              icon: Icons.remove_circle_outline,
               title: 'Remove from library',
               onTap: () {
                 Navigator.pop(context);
