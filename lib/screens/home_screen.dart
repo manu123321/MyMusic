@@ -176,11 +176,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
           const SizedBox(height: 16),
-          
-          // Playlist cards section
-          _buildPlaylistCardsSection(),
-          
-          const SizedBox(height: 16),
                     
           // Search bar
           Semantics(
@@ -258,30 +253,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section title
+        // Playlist cards section
         Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildPlaylistCardsSection(),
+        ),
+        
+        // Add spacing only if playlists are shown
+        if (_shouldShowPlaylistsSection()) const SizedBox(height: 24),
+        
+        // All Songs section title
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
               Text(
                 _isSearching ? 'Search Results' : 'All Songs',
                 style: const TextStyle(
-                          color: Colors.white,
-                  fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Text(
                 '${songs.length} songs',
                 style: TextStyle(
                   color: Colors.grey[400],
                   fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 16),
         
         // Songs list
@@ -303,7 +307,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   },
                 ),
         ),
-            ],
+      ],
     );
   }
 
@@ -599,50 +603,144 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final playlists = ref.watch(playlistsProvider);
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
     
-    // Don't show anything if there are no playlists
-    if (userPlaylists.isEmpty) {
+    // Don't show anything if there are no playlists or if searching
+    if (userPlaylists.isEmpty || _isSearching) {
       return const SizedBox.shrink();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Your Playlists',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+      
         const SizedBox(height: 12),
-        SizedBox(
-          height: 160, // Fixed height for horizontal scrolling
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: userPlaylists.length,
-            itemBuilder: (context, index) {
-              final playlist = userPlaylists[index];
-              return Container(
-                width: 140,
-                margin: EdgeInsets.only(
-                  right: index < userPlaylists.length - 1 ? 12 : 0,
-                ),
-                child: PlaylistCard(
-                  title: playlist.name,
-                  subtitle: '${playlist.songIds.length} songs',
-                  imagePath: playlist.coverArtPath,
-                  themeColor: playlist.colorTheme != null 
-                      ? Color(int.parse(playlist.colorTheme!.substring(1), radix: 16) + 0xFF000000)
-                      : null,
-                  onTap: () => _showPlaylistSongs(playlist),
+        // Spotify-style grid layout with small rectangular cards
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 3.2, // Wide rectangular cards like Spotify
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: userPlaylists.length > 6 ? 6 : userPlaylists.length, // Limit to 6 items
+          itemBuilder: (context, index) {
+            final playlist = userPlaylists[index];
+            return _buildSpotifyStylePlaylistCard(playlist);
+          },
+        ),
+        if (userPlaylists.length > 6) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PlaylistScreen(),
                 ),
               );
             },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Show all playlists',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey[400],
+                    size: 12,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ],
     );
+  }
+
+  Widget _buildSpotifyStylePlaylistCard(Playlist playlist) {
+    return GestureDetector(
+      onTap: () => _showPlaylistSongs(playlist),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[850],
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            // Small square image on the left
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: playlist.colorTheme != null 
+                    ? Color(int.parse(playlist.colorTheme!.substring(1), radix: 16) + 0xFF000000)
+                    : Colors.grey[700],
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6),
+                  bottomLeft: Radius.circular(6),
+                ),
+              ),
+              child: playlist.coverArtPath != null
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(6),
+                        bottomLeft: Radius.circular(6),
+                      ),
+                      child: Image.asset(
+                        playlist.coverArtPath!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.music_note,
+                            color: Colors.grey[400],
+                            size: 24,
+                          );
+                        },
+                      ),
+                    )
+                  : Icon(
+                      Icons.music_note,
+                      color: Colors.grey[400],
+                      size: 24,
+                    ),
+            ),
+            // Playlist name on the right
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  playlist.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  bool _shouldShowPlaylistsSection() {
+    final playlists = ref.watch(playlistsProvider);
+    final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
+    return userPlaylists.isNotEmpty && !_isSearching;
   }
 
   void _showCreatePlaylistDialog() {
