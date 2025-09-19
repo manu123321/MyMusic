@@ -277,14 +277,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               child: _buildSwipeableSongInfo(currentSong),
             ),
 
-            // Progress bar
+            // Progress bar and Controls (combined section)
             Expanded(
-              flex: 1,
+              flex: 3,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // Progress bar
                     StreamBuilder<Duration>(
                       stream: audioHandler.positionStream,
                       builder: (context, snapshot) {
@@ -353,20 +354,70 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         );
                       },
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Controls
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Secondary controls
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Main controls (moved closer to progress bar)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          onPressed: () => audioHandler.skipToPrevious(),
+                          icon: const Icon(Icons.skip_previous, color: Colors.white),
+                          iconSize: 44, // Increased by 10% from 40
+                        ),
+                        StreamBuilder<PlaybackState>(
+                          stream: audioHandler.playbackState,
+                          builder: (context, snapshot) {
+                            final playbackState = snapshot.data;
+                            final isPlaying = playbackState?.playing ?? false;
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(28), // Adjusted for new size
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  if (isPlaying) {
+                                    audioHandler.pause();
+                                  } else {
+                                    audioHandler.play();
+                                  }
+                                },
+                                child: Container(
+                                  width: 56, // Reduced by 30% from 80
+                                  height: 56, // Reduced by 30% from 80
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                     boxShadow: [
+                                       BoxShadow(
+                                         color: Colors.black.withValues(alpha: 0.3),
+                                         blurRadius: 20,
+                                         spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                                    color: Colors.black,
+                                    size: 28, // Reduced proportionally
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          onPressed: () => audioHandler.skipToNext(),
+                          icon: const Icon(Icons.skip_next, color: Colors.white),
+                          iconSize: 44, // Increased by 10% from 40
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Secondary controls (moved closer to main controls)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -511,66 +562,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                               ),
                             );
                           },
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Main controls
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          onPressed: () => audioHandler.skipToPrevious(),
-                          icon: const Icon(Icons.skip_previous, color: Colors.white),
-                          iconSize: 40,
-                        ),
-                        StreamBuilder<PlaybackState>(
-                          stream: audioHandler.playbackState,
-                          builder: (context, snapshot) {
-                            final playbackState = snapshot.data;
-                            final isPlaying = playbackState?.playing ?? false;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(40),
-                                onTap: () {
-                                  HapticFeedback.mediumImpact();
-                                  if (isPlaying) {
-                                    audioHandler.pause();
-                                  } else {
-                                    audioHandler.play();
-                                  }
-                                },
-                                child: Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
-                                     boxShadow: [
-                                       BoxShadow(
-                                         color: Colors.black.withValues(alpha: 0.3),
-                                         blurRadius: 20,
-                                         spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
-                                    color: Colors.black,
-                                    size: 40,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        IconButton(
-                          onPressed: () => audioHandler.skipToNext(),
-                          icon: const Icon(Icons.skip_next, color: Colors.white),
-                          iconSize: 40,
                         ),
                       ],
                     ),
