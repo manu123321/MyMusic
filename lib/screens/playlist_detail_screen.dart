@@ -8,6 +8,7 @@ import '../providers/music_provider.dart';
 import '../services/storage_service.dart';
 import '../services/custom_audio_handler.dart';
 import '../widgets/song_list_tile.dart';
+import '../widgets/mini_player.dart';
 import 'now_playing_screen.dart';
 
 class PlaylistDetailScreen extends ConsumerStatefulWidget {
@@ -24,7 +25,11 @@ class PlaylistDetailScreen extends ConsumerStatefulWidget {
 
 class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
   List<Song> _songs = [];
+  List<Song> _filteredSongs = [];
   bool _isLoading = true;
+  bool _isShuffled = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -36,15 +41,40 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     final songs = ref.read(storageServiceProvider).getSongsByIds(widget.playlist.songIds);
     setState(() {
       _songs = songs;
+      _filteredSongs = songs;
       _isLoading = false;
     });
+  }
+
+  void _filterSongs(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredSongs = _songs;
+      } else {
+        _filteredSongs = _songs.where((song) {
+          return song.title.toLowerCase().contains(query.toLowerCase()) ||
+                 song.artist.toLowerCase().contains(query.toLowerCase()) ||
+                 song.album.toLowerCase().contains(query.toLowerCase());
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: CustomScrollView(
+      body: Column(
+        children: [
+          Expanded(
+            child: CustomScrollView(
         slivers: [
           // App bar with playlist info
           SliverAppBar(
@@ -54,6 +84,35 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
             leading: IconButton(
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back, color: Colors.white),
+            ),
+            title: Container(
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey[900]?.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filterSongs,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search in playlist...',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                  prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            _filterSongs('');
+                          },
+                          icon: Icon(Icons.clear, color: Colors.grey[400], size: 18),
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
             ),
             actions: [
               IconButton(
@@ -124,39 +183,12 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                   // Play buttons
                                   Row(
                                     children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: _songs.isNotEmpty ? _playPlaylist : null,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.green,
-                                            foregroundColor: Colors.white,
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                              vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                          ),
-                                          icon: Icon(Icons.play_arrow, size: isVeryCompact ? 14 : (isCompact ? 16 : 20)),
-                                          label: Text(
-                                            'Play',
-                                            style: TextStyle(
-                                              fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      
-                                      SizedBox(width: isVeryCompact ? 8 : 12),
-                                      
-                                      // Shuffle button
+                                      // Shuffle button (now first)
                                       Expanded(
                                         child: ElevatedButton.icon(
                                           onPressed: _songs.isNotEmpty ? _shufflePlaylist : null,
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.grey[800],
+                                            backgroundColor: _isShuffled ? Colors.green : Colors.grey[800],
                                             foregroundColor: Colors.white,
                                             padding: EdgeInsets.symmetric(
                                               horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
@@ -173,6 +205,49 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                               fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
                                               fontWeight: FontWeight.w600,
                                             ),
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      SizedBox(width: isVeryCompact ? 8 : 12),
+                                      
+                                      // Play button (now second)
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: _songs.isNotEmpty ? _togglePlayPause : null,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.green,
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
+                                              vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(20),
+                                            ),
+                                          ),
+                                          icon: StreamBuilder<PlaybackState>(
+                                            stream: ref.read(audioHandlerProvider).playbackState,
+                                            builder: (context, snapshot) {
+                                              final isPlaying = snapshot.data?.playing ?? false;
+                                              return Icon(
+                                                isPlaying ? Icons.pause : Icons.play_arrow, 
+                                                size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
+                                              );
+                                            },
+                                          ),
+                                          label: StreamBuilder<PlaybackState>(
+                                            stream: ref.read(audioHandlerProvider).playbackState,
+                                            builder: (context, snapshot) {
+                                              final isPlaying = snapshot.data?.playing ?? false;
+                                              return Text(
+                                                isPlaying ? 'Pause' : 'Play',
+                                                style: TextStyle(
+                                                  fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ),
                                       ),
@@ -204,8 +279,14 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                   )
                 : _songs.isEmpty
                     ? _buildEmptyState()
-                    : _buildSongsList(),
+                    : _filteredSongs.isEmpty && _searchQuery.isNotEmpty
+                        ? _buildNoSearchResultsState()
+                        : _buildSongsList(),
           ),
+        ],
+            ),
+          ),
+          const MiniPlayer(),
         ],
       ),
     );
@@ -243,21 +324,54 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     );
   }
 
+  Widget _buildNoSearchResultsState() {
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 80,
+            color: Colors.grey[600],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No songs found',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try searching with different keywords',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSongsList() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        
         // Songs list
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _songs.length,
+          itemCount: _filteredSongs.length,
           itemBuilder: (context, index) {
-            final song = _songs[index];
+            final song = _filteredSongs[index];
+            // Find the original index in the full songs list for proper playback
+            final originalIndex = _songs.indexWhere((s) => s.id == song.id);
             return SongListTile(
               song: song,
-              onTap: () => _playSong(song, index),
+              onTap: () => _playSong(song, originalIndex >= 0 ? originalIndex : index),
               onMorePressed: () => _showRemoveFromPlaylistDialog(song),
             );
           },
@@ -450,6 +564,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     // Update local songs list
     setState(() {
       _songs = _songs.where((s) => s.id != song.id).toList();
+      _filteredSongs = _filteredSongs.where((s) => s.id != song.id).toList();
     });
     
     if (mounted) {
@@ -488,6 +603,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
       await audioHandler.setQueue(mediaItems);
       await audioHandler.play();
       
+      
       // Navigate to now playing screen
       if (mounted) {
         Navigator.of(context).push(
@@ -508,34 +624,80 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     }
   }
 
+  Future<void> _togglePlayPause() async {
+    if (_songs.isEmpty) return;
+    
+    try {
+      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final currentState = audioHandler.playbackState.value;
+      final isCurrentlyPlaying = currentState.playing;
+      
+      if (isCurrentlyPlaying) {
+        await audioHandler.pause();
+      } else {
+        // Check if there's a current queue and resume, or start new playlist
+        final currentQueue = audioHandler.queue.value;
+        if (currentQueue.isNotEmpty) {
+          await audioHandler.play();
+        } else {
+          // No current queue, start playlist
+          if (_isShuffled) {
+            await _shufflePlaylist();
+          } else {
+            await _playPlaylist();
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error controlling playback: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _shufflePlaylist() async {
     if (_songs.isEmpty) return;
     
     try {
       final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
       
-      // Shuffle the songs
-      final shuffledSongs = List<Song>.from(_songs)..shuffle();
+      // Toggle shuffle state
+      setState(() {
+        _isShuffled = !_isShuffled;
+      });
       
-      // Convert shuffled songs to MediaItems
-      final mediaItems = shuffledSongs.map((song) => MediaItem(
-        id: song.filePath,
-        title: song.title,
-        artist: song.artist,
-        album: song.album,
-        duration: Duration(milliseconds: song.duration),
-        artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
-        extras: {
-          'songId': song.id,
-          'trackNumber': song.trackNumber,
-          'year': song.year,
-          'genre': song.genre,
-        },
-      )).toList();
+      if (_isShuffled) {
+        // Shuffle the songs
+        final shuffledSongs = List<Song>.from(_songs)..shuffle();
+        
+        // Convert shuffled songs to MediaItems
+        final mediaItems = shuffledSongs.map((song) => MediaItem(
+          id: song.filePath,
+          title: song.title,
+          artist: song.artist,
+          album: song.album,
+          duration: Duration(milliseconds: song.duration),
+          artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
+          extras: {
+            'songId': song.id,
+            'trackNumber': song.trackNumber,
+            'year': song.year,
+            'genre': song.genre,
+          },
+        )).toList();
 
-      // Set the shuffled playlist as the queue
-      await audioHandler.setQueue(mediaItems);
-      await audioHandler.play();
+        // Set the shuffled playlist as the queue
+        await audioHandler.setQueue(mediaItems);
+        await audioHandler.play();
+      } else {
+        // Play normal playlist
+        await _playPlaylist();
+      }
       
       // Navigate to now playing screen
       if (mounted) {
@@ -546,6 +708,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         );
       }
     } catch (e) {
+      setState(() {
+        _isShuffled = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
