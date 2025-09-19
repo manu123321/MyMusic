@@ -452,12 +452,14 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
       _songs = _songs.where((s) => s.id != song.id).toList();
     });
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Removed "${song.title}" from playlist', style: const TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Removed "${song.title}" from playlist', style: const TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
+        ),
+      );
+    }
   }
 
   Future<void> _playPlaylist() async {
@@ -466,7 +468,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     try {
       final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
       
-      // Convert songs to MediaItems
+      // Convert songs to MediaItems in their original playlist order
       final mediaItems = _songs.map((song) => MediaItem(
         id: song.filePath,
         title: song.title,
@@ -482,23 +484,27 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         },
       )).toList();
 
-      // Set the entire playlist as the queue
+      // Set the entire playlist as the queue (will start from first song)
       await audioHandler.setQueue(mediaItems);
       await audioHandler.play();
       
       // Navigate to now playing screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const NowPlayingScreen(),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const NowPlayingScreen(),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error playing playlist: $e', style: const TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing playlist: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
     }
   }
 
@@ -511,7 +517,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
       // Shuffle the songs
       final shuffledSongs = List<Song>.from(_songs)..shuffle();
       
-      // Convert songs to MediaItems
+      // Convert shuffled songs to MediaItems
       final mediaItems = shuffledSongs.map((song) => MediaItem(
         id: song.filePath,
         title: song.title,
@@ -532,18 +538,22 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
       await audioHandler.play();
       
       // Navigate to now playing screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const NowPlayingScreen(),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const NowPlayingScreen(),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error shuffling playlist: $e', style: const TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error shuffling playlist: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
     }
   }
 
@@ -551,9 +561,16 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     try {
       final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
       
-      // Convert songs to MediaItems starting from the selected song
-      final songsToPlay = _songs.skip(index).toList();
-      final mediaItems = songsToPlay.map((s) => MediaItem(
+      // Convert ALL playlist songs to MediaItems in their original order, but put the selected song first
+      // This ensures the selected song starts playing while maintaining the full playlist context
+      final selectedSong = _songs[index];
+      final beforeSelected = _songs.take(index).toList();
+      final afterSelected = _songs.skip(index + 1).toList();
+      
+      // Reorder: selected song first, then remaining songs in order
+      final reorderedSongs = [selectedSong, ...afterSelected, ...beforeSelected];
+      
+      final mediaItems = reorderedSongs.map((s) => MediaItem(
         id: s.filePath,
         title: s.title,
         artist: s.artist,
@@ -565,10 +582,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
           'trackNumber': s.trackNumber,
           'year': s.year,
           'genre': s.genre,
+          'playlistIndex': reorderedSongs.indexOf(s), // Track original position
         },
       )).toList();
 
-      // Set the queue starting from the selected song
+      // Set the complete playlist as the queue (selected song will be at index 0)
       await audioHandler.setQueue(mediaItems);
       await audioHandler.play();
       
@@ -577,18 +595,22 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
       await ref.read(storageServiceProvider).updateSongPlayCount(song.id);
       
       // Navigate to now playing screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const NowPlayingScreen(),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const NowPlayingScreen(),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error playing song: $e', style: const TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing song: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
     }
   }
 }

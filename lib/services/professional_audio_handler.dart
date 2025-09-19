@@ -295,7 +295,7 @@ class ProfessionalAudioHandler extends BaseAudioHandler
         return;
       }
 
-      _loggingService.logInfo('Setting queue with ${items.length} items - CIRCULAR NAVIGATION (HOME SCREEN ORDER)');
+      _loggingService.logInfo('Setting queue with ${items.length} items');
       
       // Stop current playback
       await _player.stop();
@@ -304,24 +304,32 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       await _playlist.clear();
       _queue.clear();
       
-      // CIRCULAR NAVIGATION: Load ALL songs in alphabetical order
-      await _buildCircularQueue(items.first);
+      // Check if this is a single song (individual play) or multiple songs (playlist play)
+      if (items.length == 1) {
+        // SINGLE SONG: Load ALL songs in alphabetical order for circular navigation
+        _loggingService.logInfo('Single song play - enabling circular navigation with all songs');
+        await _buildCircularQueue(items.first);
+      } else {
+        // PLAYLIST: Use only the provided songs in the exact order they were provided
+        _loggingService.logInfo('Playlist play - using only provided songs in exact order');
+        await _buildPlaylistQueue(items);
+      }
       
       // Create audio sources
       final sources = _queue.map((song) => 
           AudioSource.uri(Uri.file(song.filePath))).toList();
       await _playlist.addAll(sources);
       
-      // Find the index of the selected song in the circular queue
+      // Find the index of the selected song in the queue
       final selectedSong = _mediaItemToSong(items.first);
       final selectedIndex = _queue.indexWhere((s) => s.id == selectedSong.id);
       
       // Set audio source starting from selected song index
-      await _player.setAudioSource(_playlist, initialIndex: selectedIndex);
+      await _player.setAudioSource(_playlist, initialIndex: selectedIndex >= 0 ? selectedIndex : 0);
       
       // Update state
-      _currentIndex = selectedIndex;
-      _currentSong = _queue[selectedIndex];
+      _currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
+      _currentSong = _queue[_currentIndex];
       
       // Update streams
       final mediaItems = _queue.map(_songToMediaItem).toList();
@@ -334,7 +342,7 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       // CRITICAL FIX: Start position tracking immediately for first song
       _startPositionTimer(pausedMode: false);
       
-      _loggingService.logInfo('Circular queue built with ${_queue.length} songs. Playing: ${_currentSong!.title} (index: $selectedIndex)');
+      _loggingService.logInfo('Queue built with ${_queue.length} songs. Playing: ${_currentSong!.title} (index: $_currentIndex)');
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error setting queue', e, stackTrace);
@@ -371,6 +379,32 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       
     } catch (e, stackTrace) {
       _loggingService.logError('Error building circular queue', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Builds a playlist queue with only the provided songs in the exact order they were provided
+  Future<void> _buildPlaylistQueue(List<MediaItem> items) async {
+    try {
+      _loggingService.logInfo('Building playlist queue with ${items.length} songs in provided order');
+      
+      // Convert MediaItems to Songs and validate files
+      final validSongs = <Song>[];
+      for (final item in items) {
+        final song = _mediaItemToSong(item);
+        if (await _validateSongFile(song)) {
+          validSongs.add(song);
+        } else {
+          _loggingService.logWarning('Skipping invalid song file: ${song.title}');
+        }
+      }
+      
+      _queue.addAll(validSongs);
+      
+      _loggingService.logInfo('Built playlist queue with ${_queue.length} valid songs in EXACT PROVIDED ORDER');
+      
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error building playlist queue', e, stackTrace);
       rethrow;
     }
   }
