@@ -186,7 +186,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                       // Shuffle button (now first)
                                       Expanded(
                                         child: ElevatedButton.icon(
-                                          onPressed: _songs.isNotEmpty ? _shufflePlaylist : null,
+                                          onPressed: _songs.isNotEmpty ? _toggleShuffle : null,
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: _isShuffled ? Colors.green : Colors.grey[800],
                                             foregroundColor: Colors.white,
@@ -638,11 +638,12 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         // Check if there's a current queue and resume, or start new playlist
         final currentQueue = audioHandler.queue.value;
         if (currentQueue.isNotEmpty) {
+          // Resume existing queue
           await audioHandler.play();
         } else {
-          // No current queue, start playlist
+          // No current queue, start new playlist based on shuffle state
           if (_isShuffled) {
-            await _shufflePlaylist();
+            await _playShuffledPlaylist();
           } else {
             await _playPlaylist();
           }
@@ -660,44 +661,56 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     }
   }
 
-  Future<void> _shufflePlaylist() async {
+  void _toggleShuffle() {
+    // Simply toggle shuffle state without starting playback
+    setState(() {
+      _isShuffled = !_isShuffled;
+    });
+    
+    // Show feedback to user
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isShuffled ? 'Shuffle enabled' : 'Shuffle disabled', 
+            style: const TextStyle(color: Colors.black)
+          ),
+          backgroundColor: Colors.white,
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _playShuffledPlaylist() async {
     if (_songs.isEmpty) return;
     
     try {
       final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
       
-      // Toggle shuffle state
-      setState(() {
-        _isShuffled = !_isShuffled;
-      });
+      // Shuffle the songs
+      final shuffledSongs = List<Song>.from(_songs)..shuffle();
       
-      if (_isShuffled) {
-        // Shuffle the songs
-        final shuffledSongs = List<Song>.from(_songs)..shuffle();
-        
-        // Convert shuffled songs to MediaItems
-        final mediaItems = shuffledSongs.map((song) => MediaItem(
-          id: song.filePath,
-          title: song.title,
-          artist: song.artist,
-          album: song.album,
-          duration: Duration(milliseconds: song.duration),
-          artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
-          extras: {
-            'songId': song.id,
-            'trackNumber': song.trackNumber,
-            'year': song.year,
-            'genre': song.genre,
-          },
-        )).toList();
+      // Convert shuffled songs to MediaItems
+      final mediaItems = shuffledSongs.map((song) => MediaItem(
+        id: song.filePath,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: Duration(milliseconds: song.duration),
+        artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
+        extras: {
+          'songId': song.id,
+          'trackNumber': song.trackNumber,
+          'year': song.year,
+          'genre': song.genre,
+        },
+      )).toList();
 
-        // Set the shuffled playlist as the queue
-        await audioHandler.setQueue(mediaItems);
-        await audioHandler.play();
-      } else {
-        // Play normal playlist
-        await _playPlaylist();
-      }
+      // Set the shuffled playlist as the queue
+      await audioHandler.setQueue(mediaItems);
+      await audioHandler.play();
       
       // Navigate to now playing screen
       if (mounted) {
@@ -708,13 +721,10 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         );
       }
     } catch (e) {
-      setState(() {
-        _isShuffled = false;
-      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error shuffling playlist: $e', style: const TextStyle(color: Colors.black)),
+            content: Text('Error playing shuffled playlist: $e', style: const TextStyle(color: Colors.black)),
             backgroundColor: Colors.white,
           ),
         );
