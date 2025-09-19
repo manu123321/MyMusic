@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/playlist.dart';
 import '../models/song.dart';
 import '../providers/music_provider.dart';
-import '../services/storage_service.dart';
-import '../services/custom_audio_handler.dart';
 import '../widgets/song_list_tile.dart';
 import '../widgets/mini_player.dart';
 import 'now_playing_screen.dart';
@@ -23,18 +21,61 @@ class PlaylistDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
 }
 
-class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
+class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
+    with TickerProviderStateMixin {
   List<Song> _songs = [];
   List<Song> _filteredSongs = [];
   bool _isLoading = true;
   bool _isShuffled = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  late AnimationController _headerAnimationController;
+  late Animation<double> _headerOpacityAnimation;
+  late Animation<double> _headerHeightAnimation;
+  bool _isSearchFocused = false;
 
   @override
   void initState() {
     super.initState();
     _loadSongs();
+    
+    // Initialize animation controller
+    _headerAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _headerOpacityAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _headerAnimationController,
+      curve: Curves.easeInOut,
+    ));
+    
+    _headerHeightAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _headerAnimationController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Listen to search focus changes
+    _searchFocusNode.addListener(() {
+      if (_searchFocusNode.hasFocus != _isSearchFocused) {
+        setState(() {
+          _isSearchFocused = _searchFocusNode.hasFocus;
+        });
+        
+        if (_isSearchFocused) {
+          _headerAnimationController.forward();
+        } else {
+          _headerAnimationController.reverse();
+        }
+      }
+    });
   }
 
   void _loadSongs() {
@@ -64,6 +105,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _headerAnimationController.dispose();
     super.dispose();
   }
 
@@ -78,22 +121,29 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         slivers: [
           // App bar with playlist info
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: _isSearchFocused ? 80 : 300,
             pinned: true,
             backgroundColor: Colors.black,
             leading: IconButton(
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back, color: Colors.white),
             ),
-            title: Container(
+            title: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               height: 40,
               margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: Colors.grey[900]?.withOpacity(0.8),
+                color: _isSearchFocused 
+                    ? Colors.grey[800]?.withValues(alpha: 0.95) 
+                    : Colors.grey[900]?.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(20),
+                border: _isSearchFocused 
+                    ? Border.all(color: Colors.green.withValues(alpha: 0.5), width: 1)
+                    : null,
               ),
               child: TextField(
                 controller: _searchController,
+                focusNode: _searchFocusNode,
                 onChanged: _filterSongs,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
@@ -121,154 +171,168 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.grey[900]!,
-                      Colors.black,
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Calculate available height and adjust layout accordingly
-                        final availableHeight = constraints.maxHeight;
-                        final isVeryCompact = availableHeight < 200;
-                        final isCompact = availableHeight < 250;
-                        
-                        return SingleChildScrollView(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight,
-                            ),
-                            child: IntrinsicHeight(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Spacer(),
-                                  
-                                  // Playlist icon
-                                  Container(
-                                    width: isVeryCompact ? 60 : (isCompact ? 80 : 120),
-                                    height: isVeryCompact ? 60 : (isCompact ? 80 : 120),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[800],
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.3),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 5),
+              background: AnimatedBuilder(
+                animation: _headerAnimationController,
+                builder: (context, child) {
+                  return Opacity(
+                    opacity: _headerOpacityAnimation.value,
+                    child: Transform.scale(
+                      scale: _headerHeightAnimation.value,
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.grey[900]!,
+                            Colors.black,
+                          ],
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Calculate available height and adjust layout accordingly
+                              final availableHeight = constraints.maxHeight;
+                              final isVeryCompact = availableHeight < 200;
+                              final isCompact = availableHeight < 250;
+                              
+                              return SingleChildScrollView(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: IntrinsicHeight(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Spacer(),
+                                        
+                                        // Playlist icon
+                                        Container(
+                                          width: isVeryCompact ? 60 : (isCompact ? 80 : 120),
+                                          height: isVeryCompact ? 60 : (isCompact ? 80 : 120),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[800],
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.3),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 5),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.playlist_play,
+                                            color: Colors.white,
+                                            size: isVeryCompact ? 24 : (isCompact ? 32 : 48),
+                                          ),
+                                        ),
+                                        
+                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
+
+                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
+                                        
+                                        // Play buttons
+                                        Row(
+                                          children: [
+                                            // Shuffle button (now first)
+                                            Expanded(
+                                              child: ElevatedButton.icon(
+                                                onPressed: _songs.isNotEmpty ? _toggleShuffle : null,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: _isShuffled ? Colors.green : Colors.grey[800],
+                                                  foregroundColor: Colors.white,
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
+                                                    vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                ),
+                                                icon: Icon(Icons.shuffle, size: isVeryCompact ? 14 : (isCompact ? 16 : 20)),
+                                                label: Text(
+                                                  'Shuffle',
+                                                  style: TextStyle(
+                                                    fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            
+                                            SizedBox(width: isVeryCompact ? 8 : 12),
+                                            
+                                            // Play button (now second)
+                                            Expanded(
+                                              child: ElevatedButton.icon(
+                                                onPressed: _songs.isNotEmpty ? _togglePlayPause : null,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  foregroundColor: Colors.white,
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
+                                                    vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                ),
+                                                icon: StreamBuilder<PlaybackState>(
+                                                  stream: ref.read(audioHandlerProvider).playbackState,
+                                                  builder: (context, snapshot) {
+                                                    final isPlaying = snapshot.data?.playing ?? false;
+                                                    return Icon(
+                                                      isPlaying ? Icons.pause : Icons.play_arrow, 
+                                                      size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
+                                                    );
+                                                  },
+                                                ),
+                                                label: StreamBuilder<PlaybackState>(
+                                                  stream: ref.read(audioHandlerProvider).playbackState,
+                                                  builder: (context, snapshot) {
+                                                    final isPlaying = snapshot.data?.playing ?? false;
+                                                    return Text(
+                                                      isPlaying ? 'Pause' : 'Play',
+                                                      style: TextStyle(
+                                                        fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                    child: Icon(
-                                      Icons.playlist_play,
-                                      color: Colors.white,
-                                      size: isVeryCompact ? 24 : (isCompact ? 32 : 48),
-                                    ),
                                   ),
-                                  
-                                  SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
-
-                                  SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
-                                  
-                                  // Play buttons
-                                  Row(
-                                    children: [
-                                      // Shuffle button (now first)
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: _songs.isNotEmpty ? _toggleShuffle : null,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: _isShuffled ? Colors.green : Colors.grey[800],
-                                            foregroundColor: Colors.white,
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                              vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                          ),
-                                          icon: Icon(Icons.shuffle, size: isVeryCompact ? 14 : (isCompact ? 16 : 20)),
-                                          label: Text(
-                                            'Shuffle',
-                                            style: TextStyle(
-                                              fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      
-                                      SizedBox(width: isVeryCompact ? 8 : 12),
-                                      
-                                      // Play button (now second)
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: _songs.isNotEmpty ? _togglePlayPause : null,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.green,
-                                            foregroundColor: Colors.white,
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                              vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                          ),
-                                          icon: StreamBuilder<PlaybackState>(
-                                            stream: ref.read(audioHandlerProvider).playbackState,
-                                            builder: (context, snapshot) {
-                                              final isPlaying = snapshot.data?.playing ?? false;
-                                              return Icon(
-                                                isPlaying ? Icons.pause : Icons.play_arrow, 
-                                                size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
-                                              );
-                                            },
-                                          ),
-                                          label: StreamBuilder<PlaybackState>(
-                                            stream: ref.read(audioHandlerProvider).playbackState,
-                                            builder: (context, snapshot) {
-                                              final isPlaying = snapshot.data?.playing ?? false;
-                                              return Text(
-                                                isPlaying ? 'Pause' : 'Play',
-                                                style: TextStyle(
-                                                  fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
           
           // Songs list
           SliverToBoxAdapter(
-            child: _isLoading
+            child: Container(
+              margin: EdgeInsets.only(top: _isSearchFocused ? 0 : 16),
+              child: _isLoading
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32.0),
@@ -282,6 +346,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                     : _filteredSongs.isEmpty && _searchQuery.isNotEmpty
                         ? _buildNoSearchResultsState()
                         : _buildSongsList(),
+            ),
           ),
         ],
             ),
@@ -581,7 +646,14 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     if (_songs.isEmpty) return;
     
     try {
-      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final audioHandler = ref.read(audioHandlerProvider);
+      
+      // Reset shuffle state when playing normal playlist
+      if (_isShuffled) {
+        setState(() {
+          _isShuffled = false;
+        });
+      }
       
       // Convert songs to MediaItems in their original playlist order
       final mediaItems = _songs.map((song) => MediaItem(
@@ -628,7 +700,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     if (_songs.isEmpty) return;
     
     try {
-      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final audioHandler = ref.read(audioHandlerProvider);
       final currentState = audioHandler.playbackState.value;
       final isCurrentlyPlaying = currentState.playing;
       
@@ -687,7 +759,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     if (_songs.isEmpty) return;
     
     try {
-      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final audioHandler = ref.read(audioHandlerProvider);
       
       // Shuffle the songs
       final shuffledSongs = List<Song>.from(_songs)..shuffle();
@@ -734,7 +806,14 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
 
   Future<void> _playSong(Song song, int index) async {
     try {
-      final audioHandler = ref.read(audioHandlerProvider) as CustomAudioHandler;
+      final audioHandler = ref.read(audioHandlerProvider);
+      
+      // Reset shuffle state when playing individual song (user made specific choice)
+      if (_isShuffled) {
+        setState(() {
+          _isShuffled = false;
+        });
+      }
       
       // Convert ALL playlist songs to MediaItems in their original order, but put the selected song first
       // This ensures the selected song starts playing while maintaining the full playlist context
