@@ -112,10 +112,17 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Column(
-        children: [
+    return PopScope(
+      canPop: !_isSearchFocused,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isSearchFocused) {
+          _searchFocusNode.unfocus();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Column(
+          children: [
           Expanded(
             child: CustomScrollView(
         slivers: [
@@ -125,12 +132,18 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
             pinned: true,
             backgroundColor: Colors.black,
             leading: IconButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (_isSearchFocused) {
+                  _searchFocusNode.unfocus();
+                } else {
+                  Navigator.pop(context);
+                }
+              },
               icon: const Icon(Icons.arrow_back, color: Colors.white),
             ),
             title: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              height: 40,
+              height: 44,
               margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: _isSearchFocused 
@@ -160,7 +173,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 ),
               ),
             ),
@@ -344,6 +357,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
           ),
           const MiniPlayer(),
         ],
+      ),
       ),
     );
   }
@@ -668,18 +682,6 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
       
       // Don't auto-navigate to now playing screen
       // Let user use mini player or tap mini player to navigate
-      
-      // Show feedback that playlist started playing
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Playing "${widget.playlist.name}"', style: const TextStyle(color: Colors.black)),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -767,18 +769,6 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
       
       // Don't auto-navigate to now playing screen
       // Let user use mini player or tap mini player to navigate
-      
-      // Show feedback that shuffled playlist started playing
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Shuffling "${widget.playlist.name}"', style: const TextStyle(color: Colors.black)),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
