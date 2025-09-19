@@ -244,9 +244,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                             // Shuffle button (now first)
                                             Expanded(
                                               child: ElevatedButton.icon(
-                                                onPressed: _songs.isNotEmpty ? _toggleShuffle : null,
+                                                onPressed: _songs.isNotEmpty ? _playShuffledFromStart : null,
                                                 style: ElevatedButton.styleFrom(
-                                                  backgroundColor: _isShuffled ? Colors.green : Colors.grey[800],
+                                                  backgroundColor: Colors.grey[800],
                                                   foregroundColor: Colors.white,
                                                   padding: EdgeInsets.symmetric(
                                                     horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
@@ -272,7 +272,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                             // Play button (now second)
                                             Expanded(
                                               child: ElevatedButton.icon(
-                                                onPressed: _songs.isNotEmpty ? _togglePlayPause : null,
+                                                onPressed: _songs.isNotEmpty ? _playPlaylistFromStart : null,
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor: Colors.green,
                                                   foregroundColor: Colors.white,
@@ -284,28 +284,16 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                                     borderRadius: BorderRadius.circular(20),
                                                   ),
                                                 ),
-                                                icon: StreamBuilder<PlaybackState>(
-                                                  stream: ref.read(audioHandlerProvider).playbackState,
-                                                  builder: (context, snapshot) {
-                                                    final isPlaying = snapshot.data?.playing ?? false;
-                                                    return Icon(
-                                                      isPlaying ? Icons.pause : Icons.play_arrow, 
-                                                      size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
-                                                    );
-                                                  },
+                                                icon: Icon(
+                                                  Icons.play_arrow, 
+                                                  size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
                                                 ),
-                                                label: StreamBuilder<PlaybackState>(
-                                                  stream: ref.read(audioHandlerProvider).playbackState,
-                                                  builder: (context, snapshot) {
-                                                    final isPlaying = snapshot.data?.playing ?? false;
-                                                    return Text(
-                                                      isPlaying ? 'Pause' : 'Play',
-                                                      style: TextStyle(
-                                                        fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    );
-                                                  },
+                                                label: Text(
+                                                  'Play',
+                                                  style: TextStyle(
+                                                    fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -678,12 +666,17 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
       await audioHandler.setQueue(mediaItems);
       await audioHandler.play();
       
+      // Don't auto-navigate to now playing screen
+      // Let user use mini player or tap mini player to navigate
       
-      // Navigate to now playing screen
+      // Show feedback that playlist started playing
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const NowPlayingScreen(),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Playing "${widget.playlist.name}"', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -699,36 +692,21 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
     }
   }
 
-  Future<void> _togglePlayPause() async {
+  Future<void> _playPlaylistFromStart() async {
     if (_songs.isEmpty) return;
     
     try {
-      final audioHandler = ref.read(audioHandlerProvider);
-      final currentState = audioHandler.playbackState.value;
-      final isCurrentlyPlaying = currentState.playing;
-      
-      if (isCurrentlyPlaying) {
-        await audioHandler.pause();
+      // Always start playlist from the beginning, regardless of current playback state
+      if (_isShuffled) {
+        await _playShuffledPlaylist();
       } else {
-        // Check if there's a current queue and resume, or start new playlist
-        final currentQueue = audioHandler.queue.value;
-        if (currentQueue.isNotEmpty) {
-          // Resume existing queue
-          await audioHandler.play();
-        } else {
-          // No current queue, start new playlist based on shuffle state
-          if (_isShuffled) {
-            await _playShuffledPlaylist();
-          } else {
-            await _playPlaylist();
-          }
-        }
+        await _playPlaylist();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error controlling playback: $e', style: const TextStyle(color: Colors.black)),
+            content: Text('Error playing playlist: $e', style: const TextStyle(color: Colors.black)),
             backgroundColor: Colors.white,
           ),
         );
@@ -736,25 +714,25 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
     }
   }
 
-  void _toggleShuffle() {
-    // Simply toggle shuffle state without starting playback
-    setState(() {
-      _isShuffled = !_isShuffled;
-    });
+  Future<void> _playShuffledFromStart() async {
+    if (_songs.isEmpty) return;
     
-    // Show feedback to user
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _isShuffled ? 'Shuffle enabled' : 'Shuffle disabled', 
-            style: const TextStyle(color: Colors.black)
+    try {
+      // Enable shuffle and start playing
+      setState(() {
+        _isShuffled = true;
+      });
+      
+      await _playShuffledPlaylist();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing shuffled playlist: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
           ),
-          backgroundColor: Colors.white,
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -787,11 +765,17 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
       await audioHandler.setQueue(mediaItems);
       await audioHandler.play();
       
-      // Navigate to now playing screen
+      // Don't auto-navigate to now playing screen
+      // Let user use mini player or tap mini player to navigate
+      
+      // Show feedback that shuffled playlist started playing
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const NowPlayingScreen(),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Shuffling "${widget.playlist.name}"', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -851,14 +835,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
       await ref.read(storageServiceProvider).addToRecentlyPlayed(song.id);
       await ref.read(storageServiceProvider).updateSongPlayCount(song.id);
       
-      // Navigate to now playing screen
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const NowPlayingScreen(),
-          ),
-        );
-      }
+      // Don't auto-navigate to now playing screen
+      // Let user use mini player or tap mini player to navigate
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

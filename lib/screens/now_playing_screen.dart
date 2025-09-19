@@ -25,8 +25,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   
   final LoggingService _loggingService = LoggingService();
   
-  bool _showLyrics = false;
-  bool _showEqualizer = false;
   bool _isDraggingSlider = false;
   bool _isSwipeInProgress = false;
   double _swipeProgress = 0.0;
@@ -303,7 +301,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           children: [
                             SliderTheme(
                               data: SliderTheme.of(context).copyWith(
-                                trackHeight: 4,
+                                trackHeight: 3, // Reduced by 30% from 4 (4 * 0.7 = 2.8 ≈ 3)
                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
                                 activeTrackColor: Colors.white,
@@ -343,15 +341,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                               children: [
                                 Text(
                                   _formatDuration(position),
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
+                                  style: const TextStyle(
+                                    color: Colors.white,
                                     fontSize: 12,
                                   ),
                                 ),
                                 Text(
                                   _formatDuration(duration),
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
+                                  style: const TextStyle(
+                                    color: Colors.white,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -526,30 +524,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         ),
                         IconButton(
                           onPressed: () {
-                            setState(() {
-                              _showLyrics = !_showLyrics;
-                              if (_showLyrics) {
-                                _showEqualizer = false;
-                              }
-                            });
-                          },
-                          icon: Icon(
-                            Icons.lyrics,
-                            color: _showLyrics ? Colors.green : Colors.grey[400],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _showEqualizer = !_showEqualizer;
-                              if (_showEqualizer) {
-                                _showLyrics = false;
-                              }
-                            });
+                            _showSnackBar('Equalizer coming soon', Colors.orange);
                           },
                           icon: Icon(
                             Icons.equalizer,
-                            color: _showEqualizer ? Colors.green : Colors.grey[400],
+                            color: Colors.grey[400],
                           ),
                         ),
                         Consumer(
@@ -568,7 +547,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 );
                               },
                               icon: Icon(
-                                Icons.timer,
+                                Icons.timer_outlined,
                                 color: isTimerActive ? Colors.green : Colors.grey[400],
                               ),
                             );
@@ -584,29 +563,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               ),
             ),
 
-              // Lyrics or Equalizer panel
-            if (_showLyrics || _showEqualizer)
-              Expanded(
-                flex: 2,
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _showLyrics 
-                          ? 'Lyrics coming soon' 
-                          : 'Equalizer coming soon',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
                ],
              ),
             ),
