@@ -44,7 +44,7 @@ class Playlist extends HiveObject {
     required this.id,
     required this.name,
     this.description,
-    this.songIds = const [],
+    List<String>? songIds,
     required this.dateCreated,
     required this.dateModified,
     this.coverArtPath,
@@ -52,8 +52,9 @@ class Playlist extends HiveObject {
     this.sortOrder = 0,
     this.isPublic = false,
     this.colorTheme,
-  }) : assert(name.trim().isNotEmpty, 'Playlist name cannot be empty'),
-       assert(songIds.length <= 10000, 'Playlist cannot exceed 10,000 songs'),
+  }) : songIds = songIds ?? <String>[],
+       assert(name.trim().isNotEmpty, 'Playlist name cannot be empty'),
+       assert((songIds ?? <String>[]).length <= 10000, 'Playlist cannot exceed 10,000 songs'),
        assert(sortOrder >= 0, 'Sort order must be non-negative');
 
   factory Playlist.create({
