@@ -111,17 +111,14 @@ class _SongListTileState extends ConsumerState<SongListTile>
                         ),
 
                         // Additional info row
-                        if (widget.song.isFavorite || widget.song.playCount > 0 || widget.showRating)
+                        if (widget.song.isFavorite)
                           const SizedBox(height: 4),
-                        if (widget.song.isFavorite || widget.song.playCount > 0 || widget.showRating)
+                        if (widget.song.isFavorite)
                           _buildAdditionalInfo(),
                       ],
                     ),
                   ),
 
-                  // Rating display (if enabled)
-                  if (widget.showRating && widget.song.rating != null)
-                    _buildRatingStars(),
 
                   // More options button - positioned very close to right edge
                   IconButton(
@@ -225,36 +222,10 @@ class _SongListTileState extends ConsumerState<SongListTile>
             color: Colors.red[400],
             size: 12,
           ),
-        if (widget.song.isFavorite && widget.song.playCount > 0)
-          const SizedBox(width: 4),
-        if (widget.song.playCount > 0)
-          Text(
-            '${widget.song.playCount} plays',
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 11,
-            ),
-          ),
       ],
     );
   }
 
-  Widget _buildRatingStars() {
-    if (widget.song.rating == null) return const SizedBox.shrink();
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (index) {
-        return Icon(
-          index < (widget.song.rating ?? 0).round()
-              ? Icons.star
-              : Icons.star_border,
-          color: Colors.amber,
-          size: 10,
-        );
-      }),
-    );
-  }
 
   Future<void> _playSong() async {
     if (_isLoading) return;
@@ -291,7 +262,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
           'year': widget.song.year,
           'genre': widget.song.genre,
           'isFavorite': widget.song.isFavorite,
-          'rating': widget.song.rating,
         },
       );
 
@@ -586,9 +556,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
               _buildInfoRow('Duration', widget.song.formattedDuration),
               _buildInfoRow('File size', widget.song.formattedFileSize),
               _buildInfoRow('Bitrate', '${widget.song.bitrate} kbps'),
-              _buildInfoRow('Play count', widget.song.playCount.toString()),
-              if (widget.song.rating != null)
-                _buildInfoRow('Rating', '${widget.song.rating!.toStringAsFixed(1)} stars'),
               _buildInfoRow('Date added', widget.song.dateAdded.toString().split(' ')[0]),
               if (widget.song.lastPlayed != null)
                 _buildInfoRow('Last played', widget.song.lastPlayed.toString().split(' ')[0]),
@@ -712,7 +679,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
           'year': widget.song.year,
           'genre': widget.song.genre,
           'isFavorite': widget.song.isFavorite,
-          'rating': widget.song.rating,
         },
       );
       
