@@ -12,7 +12,6 @@ import '../services/custom_audio_handler.dart';
 import '../services/storage_service.dart';
 import '../services/logging_service.dart';
 import 'now_playing_screen.dart';
-import 'playlist_screen.dart';
 import 'create_playlist_screen.dart';
 import 'playlist_detail_screen.dart';
 
@@ -140,42 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // App title and action buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Music Player',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const PlaylistScreen(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.library_music, color: Colors.white, size: 20),
-                label: const Text(
-                  'Your Library',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+         
                     
           // Search bar
           Semantics(
@@ -624,46 +588,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
           ),
-          itemCount: userPlaylists.length > 6 ? 6 : userPlaylists.length, // Limit to 6 items
+          itemCount: userPlaylists.length, // Show all playlists
           itemBuilder: (context, index) {
             final playlist = userPlaylists[index];
             return _buildSpotifyStylePlaylistCard(playlist);
           },
         ),
-        if (userPlaylists.length > 6) ...[
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const PlaylistScreen(),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Show all playlists',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey[400],
-                    size: 12,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
