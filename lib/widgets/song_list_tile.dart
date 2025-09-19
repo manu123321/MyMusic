@@ -6,6 +6,7 @@ import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
 import '../providers/music_provider.dart';
 import '../services/logging_service.dart';
+import 'add_to_playlist_sheet.dart';
 import '../screens/now_playing_screen.dart';
 
 class SongListTile extends ConsumerStatefulWidget {
@@ -545,80 +546,13 @@ class _SongListTileState extends ConsumerState<SongListTile>
   }
 
   void _showAddToPlaylistDialog() {
-    final playlists = ref.read(playlistsProvider.notifier).getUserPlaylists();
-
-    showDialog(
+    HapticFeedback.selectionClick();
+    
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Add to playlist',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: playlists.isEmpty ? 100 : 300,
-          child: playlists.isEmpty
-              ? const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.playlist_add, color: Colors.grey, size: 48),
-                SizedBox(height: 8),
-                Text(
-                  'No playlists available',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          )
-              : ListView.builder(
-            itemCount: playlists.length,
-            itemBuilder: (context, index) {
-              final playlist = playlists[index];
-              return ListTile(
-                leading: const Icon(Icons.playlist_play, color: Colors.white),
-                title: Text(
-                  playlist.name,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  '${playlist.songIds.length} songs',
-                  style: TextStyle(color: Colors.grey[400]),
-                ),
-                onTap: () async {
-                  try {
-                    final navigator = Navigator.of(context);
-                    await ref
-                        .read(playlistsProvider.notifier)
-                        .addSongToPlaylist(playlist.id, widget.song.id);
-
-                    if (mounted) {
-                      navigator.pop();
-                      _showSuccessSnackBar('Added to ${playlist.name}');
-                    }
-                  } catch (e, stackTrace) {
-                    _loggingService.logError('Error adding to playlist', e, stackTrace);
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                      _showErrorSnackBar('Failed to add to playlist');
-                    }
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => AddToPlaylistSheet(song: widget.song),
     );
   }
 
