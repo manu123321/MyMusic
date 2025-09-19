@@ -284,30 +284,42 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                             
                                             // Play button (now second)
                                             Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: _songs.isNotEmpty ? _playPlaylistFromStart : null,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.green,
-                                                  foregroundColor: Colors.white,
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                                    vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                ),
-                                                icon: Icon(
-                                                  Icons.play_arrow, 
-                                                  size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
-                                                ),
-                                                label: Text(
-                                                  'Play',
-                                                  style: TextStyle(
-                                                    fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
+                                              child: StreamBuilder<PlaybackState>(
+                                                stream: ref.read(audioHandlerProvider).playbackState,
+                                                builder: (context, snapshot) {
+                                                  final playbackState = snapshot.data;
+                                                  final isGloballyPlaying = playbackState?.playing ?? false;
+                                                  
+                                                  // Check if current playing music is from this playlist
+                                                  final isPlayingThisPlaylist = _isCurrentlyPlayingThisPlaylist();
+                                                  final shouldShowPause = isGloballyPlaying && isPlayingThisPlaylist;
+                                                  
+                                                  return ElevatedButton.icon(
+                                                    onPressed: _songs.isNotEmpty ? () => _togglePlayback(shouldShowPause) : null,
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.green,
+                                                      foregroundColor: Colors.white,
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
+                                                        vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
+                                                      ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(20),
+                                                      ),
+                                                    ),
+                                                    icon: Icon(
+                                                      shouldShowPause ? Icons.pause : Icons.play_arrow, 
+                                                      size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
+                                                    ),
+                                                    label: Text(
+                                                      shouldShowPause ? 'Pause' : 'Play',
+                                                      style: TextStyle(
+                                                        fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
                                               ),
                                             ),
                                           ],
@@ -709,6 +721,46 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error playing playlist: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
+    }
+  }
+
+  bool _isCurrentlyPlayingThisPlaylist() {
+    final audioHandler = ref.read(audioHandlerProvider);
+    final currentMediaItem = audioHandler.mediaItem.value;
+    
+    if (currentMediaItem == null) return false;
+    
+    // Check if the current playing song is in this playlist
+    return _songs.any((song) => song.filePath == currentMediaItem.id);
+  }
+
+  Future<void> _togglePlayback(bool isPlayingThisPlaylist) async {
+    if (_songs.isEmpty) return;
+    
+    try {
+      final audioHandler = ref.read(audioHandlerProvider);
+      
+      if (isPlayingThisPlaylist) {
+        // Pause current playback (since it's playing this playlist)
+        await audioHandler.pause();
+      } else {
+        // Either nothing is playing, or something else is playing
+        // Start this playlist based on shuffle state
+        if (_isShuffled) {
+          await _playShuffledPlaylist();
+        } else {
+          await _playPlaylist();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error controlling playback: $e', style: const TextStyle(color: Colors.black)),
             backgroundColor: Colors.white,
           ),
         );
