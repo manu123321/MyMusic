@@ -364,7 +364,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         IconButton(
                           onPressed: () => audioHandler.skipToPrevious(),
                           icon: const Icon(Icons.skip_previous, color: Colors.white),
-                          iconSize: 44, // Increased by 10% from 40
+                          iconSize: 50, // Increased by 15% from 44 (44 * 1.15 = 50.6 ≈ 50)
                         ),
                         StreamBuilder<PlaybackState>(
                           stream: audioHandler.playbackState,
@@ -374,7 +374,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                borderRadius: BorderRadius.circular(28), // Adjusted for new size
+                                borderRadius: BorderRadius.circular(32), // Adjusted for new size (56 * 1.15 = 64.4, radius = 32)
                                 onTap: () {
                                   HapticFeedback.mediumImpact();
                                   if (isPlaying) {
@@ -384,8 +384,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   }
                                 },
                                 child: Container(
-                                  width: 56, // Reduced by 30% from 80
-                                  height: 56, // Reduced by 30% from 80
+                                  width: 64, // Increased by 15% from 56 (56 * 1.15 = 64.4 ≈ 64)
+                                  height: 64, // Increased by 15% from 56 (56 * 1.15 = 64.4 ≈ 64)
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: Colors.white,
@@ -400,7 +400,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   child: Icon(
                                     isPlaying ? Icons.pause : Icons.play_arrow,
                                     color: Colors.black,
-                                    size: 28, // Reduced proportionally
+                                    size: 32, // Increased by 15% from 28 (28 * 1.15 = 32.2 ≈ 32)
                                   ),
                                 ),
                               ),
@@ -410,7 +410,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         IconButton(
                           onPressed: () => audioHandler.skipToNext(),
                           icon: const Icon(Icons.skip_next, color: Colors.white),
-                          iconSize: 44, // Increased by 10% from 40
+                          iconSize: 50, // Increased by 15% from 44 (44 * 1.15 = 50.6 ≈ 50)
                         ),
                       ],
                     ),
