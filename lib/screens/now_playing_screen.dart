@@ -161,45 +161,53 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       extendBodyBehindAppBar: true,
       body: GestureDetector(
          onHorizontalDragStart: (details) {
-           _isSwipeInProgress = true;
-           _swipeProgress = 0.0;
-           _swipeDirection = 0.0;
+           // Prevent system back gesture conflict by checking start position
+           final screenWidth = MediaQuery.of(context).size.width;
+           final startX = details.globalPosition.dx;
+           const edgeThreshold = 40.0; // Reduced edge threshold for better usability
            
-           // Pre-load adjacent songs for smooth experience
-           _nextSong = _getNextSong();
-           _previousSong = _getPreviousSong();
+           // Only start swipe if not near screen edges
+           if (startX > edgeThreshold && startX < (screenWidth - edgeThreshold)) {
+             _isSwipeInProgress = true;
+             _swipeProgress = 0.0;
+             _swipeDirection = 0.0;
+             
+             // Pre-load adjacent songs for smooth experience
+             _nextSong = _getNextSong();
+             _previousSong = _getPreviousSong();
+           }
          },
          onHorizontalDragUpdate: (details) {
            if (_isSwipeInProgress) {
-             final screenWidth = MediaQuery.of(context).size.width;
-             final albumArtSize = 300.0; // Album art size
-             final centerX = screenWidth / 2;
-             final currentX = details.localPosition.dx;
-             final dragDistance = currentX - centerX;
+             // Use delta for smoother tracking and prevent stuttering
+             final deltaX = details.delta.dx;
+             const albumArtSize = 300.0;
              
-             // Calculate progress based on album art width (more intuitive)
-             final maxDragDistance = albumArtSize * 0.8; // 80% of album art width for full transition
-             final progress = (dragDistance.abs() / maxDragDistance).clamp(0.0, 1.0);
+             // Accumulate drag distance for smooth movement
+             _swipeDirection += deltaX;
+             
+             // Much more responsive thresholds
+             final maxDragDistance = albumArtSize * 0.6; // Reduced from 0.8 to 0.6 for easier triggering
+             final progress = (_swipeDirection.abs() / maxDragDistance).clamp(0.0, 1.0);
              
              // Determine direction: negative = left (next), positive = right (previous)
-             final direction = dragDistance < 0 ? -1.0 : 1.0;
+             final direction = _swipeDirection < 0 ? -1.0 : 1.0;
              
              // Only proceed if we have an adjacent song in that direction
              final hasAdjacentSong = direction < 0 ? _nextSong != null : _previousSong != null;
              
-             if (hasAdjacentSong && dragDistance.abs() > 10) {
+             // Much lower threshold for better responsiveness
+             if (hasAdjacentSong && _swipeDirection.abs() > 3) { // Reduced from 10 to 3
                _swipeProgress = progress;
-               _swipeDirection = direction;
                
-               // Store swipe state for rendering
-             } else {
-               // Reset if no adjacent song or minimal drag
+               // Direct setState for immediate response
+               if (mounted) {
+                 setState(() {});
+               }
+             } else if (_swipeDirection.abs() <= 3) {
+               // Reset if minimal drag
                _swipeProgress = 0.0;
                _swipeDirection = 0.0;
-             }
-             
-             if (mounted) {
-               setState(() {});
              }
            }
          },
@@ -821,50 +829,58 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   }
   
    void _handleSwipeEnd(DragEndDetails details, audioHandler) {
+     const progressThreshold = 0.3; // Reduced from 0.5 to 0.3 for easier triggering
+     const velocityThreshold = 200.0; // Much lower velocity threshold
      final velocity = details.primaryVelocity ?? 0;
-     const velocityThreshold = 300.0; // Velocity threshold for quick swipes
-     const progressThreshold = 0.5; // 50% progress threshold
      
      bool shouldChangeSong = false;
      bool isNext = false;
      
-     // Determine if we should change song based on progress or velocity
+     // Much more responsive conditions for song change
      if (_swipeProgress >= progressThreshold) {
-       // 50% threshold reached - change song regardless of velocity
+       // 30% threshold reached - change song regardless of velocity
        shouldChangeSong = true;
        isNext = _swipeDirection < 0; // Left swipe = next song
-       HapticFeedback.mediumImpact(); // Stronger haptic for threshold crossing
-     } else if (velocity.abs() > velocityThreshold) {
-       // Fast swipe with sufficient velocity
+       HapticFeedback.mediumImpact();
+       _loggingService.logInfo('Song change triggered by 30% threshold');
+     } else if (velocity.abs() > velocityThreshold && _swipeDirection.abs() > 20) {
+       // Fast swipe with much lower requirements
        shouldChangeSong = true;
        isNext = velocity < 0; // Left swipe = next song
-       HapticFeedback.lightImpact(); // Light haptic for velocity-based change
+       HapticFeedback.lightImpact();
+       _loggingService.logInfo('Song change triggered by velocity');
+     } else if (_swipeDirection.abs() > 80) {
+       // Even slow swipes trigger if user drags far enough
+       shouldChangeSong = true;
+       isNext = _swipeDirection < 0;
+       HapticFeedback.lightImpact();
+       _loggingService.logInfo('Song change triggered by distance');
      }
      
-     // Reset all swipe state
-     _isSwipeInProgress = false;
-     _swipeProgress = 0.0;
-     _swipeDirection = 0.0;
-     _nextSong = null;
-     _previousSong = null;
-     
-     if (mounted) {
-       setState(() {});
-     }
-     
-     // Execute song change if conditions are met
+     // Execute song change immediately for better responsiveness
      if (shouldChangeSong) {
        try {
-         if (isNext) {
+         if (isNext && _nextSong != null) {
            audioHandler.skipToNext();
            _loggingService.logInfo('Changed to next song via swipe');
-         } else {
+         } else if (!isNext && _previousSong != null) {
            audioHandler.skipToPrevious();
            _loggingService.logInfo('Changed to previous song via swipe');
          }
        } catch (e, stackTrace) {
          _loggingService.logError('Error changing song via swipe', e, stackTrace);
        }
+     }
+     
+     // Reset state after song change for cleaner experience
+     if (mounted) {
+       setState(() {
+         _isSwipeInProgress = false;
+         _swipeProgress = 0.0;
+         _swipeDirection = 0.0;
+         _nextSong = null;
+         _previousSong = null;
+       });
      }
    }
    
@@ -904,163 +920,213 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
    }
    
    Widget _buildAlbumArtWidget(MediaItem song, {required bool isCurrentSong}) {
-     return Container(
-       width: 300,
-       height: 300,
-       decoration: BoxDecoration(
-         shape: BoxShape.circle,
-         boxShadow: [
-           BoxShadow(
-             color: Colors.black.withValues(alpha: 0.3),
-             blurRadius: 20,
-             spreadRadius: 5,
-           ),
-         ],
-       ),
-       child: StreamBuilder<PlaybackState>(
-         stream: ref.read(audioHandlerProvider).playbackState,
-         builder: (context, snapshot) {
-           final playbackState = snapshot.data;
-           final isPlaying = playbackState?.playing ?? false;
-           
-           // Only animate rotation for current song when playing
-           if (isCurrentSong && isPlaying && !_albumArtController.isAnimating) {
-             _albumArtController.repeat();
-           } else if ((!isCurrentSong || !isPlaying) && _albumArtController.isAnimating) {
-             _albumArtController.stop();
-           }
+     return RepaintBoundary(
+       child: Container(
+         width: 300,
+         height: 300,
+         decoration: BoxDecoration(
+           shape: BoxShape.circle,
+           boxShadow: [
+             BoxShadow(
+               color: Colors.black.withValues(alpha: 0.3),
+               blurRadius: 20,
+               spreadRadius: 5,
+             ),
+           ],
+         ),
+         child: isCurrentSong 
+             ? StreamBuilder<PlaybackState>(
+                 stream: ref.read(audioHandlerProvider).playbackState,
+                 builder: (context, snapshot) {
+                   final playbackState = snapshot.data;
+                   final isPlaying = playbackState?.playing ?? false;
+                   
+                   // Only animate rotation for current song when playing
+                   if (isPlaying && !_albumArtController.isAnimating) {
+                     _albumArtController.repeat();
+                   } else if (!isPlaying && _albumArtController.isAnimating) {
+                     _albumArtController.stop();
+                   }
 
-           Widget albumArt = ClipOval(
-             child: song.artUri != null
-                 ? Image.file(
-                     File(song.artUri!.toFilePath()),
-                     width: 300,
-                     height: 300,
-                     fit: BoxFit.cover,
-                     errorBuilder: (context, error, stackTrace) {
-                       return Container(
-                         width: 300,
-                         height: 300,
-                         color: Colors.grey[800],
-                         child: const Icon(
-                           Icons.music_note,
-                           color: Colors.white,
-                           size: 120,
-                         ),
+                   final albumArt = _buildAlbumArtImage(song);
+                   
+                   // Only rotate current song when playing
+                   return AnimatedBuilder(
+                     animation: _albumArtController,
+                     builder: (context, child) {
+                       return Transform.rotate(
+                         angle: _albumArtController.value * 2 * 3.14159,
+                         child: child,
                        );
                      },
-                   )
-                 : Container(
-                     width: 300,
-                     height: 300,
-                     color: Colors.grey[800],
-                     child: const Icon(
-                       Icons.music_note,
-                       color: Colors.white,
-                       size: 120,
-                     ),
-                   ),
-           );
-           
-           // Only rotate current song when playing
-           if (isCurrentSong) {
-             return AnimatedBuilder(
-               animation: _albumArtController,
-               builder: (context, child) {
-                 return Transform.rotate(
-                   angle: _albumArtController.value * 2 * 3.14159,
-                   child: child,
-                 );
-               },
-               child: albumArt,
-             );
-           }
-           
-           return albumArt;
-         },
+                     child: albumArt,
+                   );
+                 },
+               )
+             : _buildAlbumArtImage(song), // Static image for adjacent songs
        ),
      );
    }
    
-   Widget _buildSwipeableAlbumSection(MediaItem currentSong) {
-     return Center(
-       child: SizedBox(
-         width: 300,
-         height: 300,
-         child: Stack(
-           alignment: Alignment.center,
-           children: [
-             // Current album art (moves with swipe)
-             Transform.translate(
-               offset: Offset(_swipeDirection * _swipeProgress * 300, 0),
-               child: Opacity(
-                 opacity: 1.0 - (_swipeProgress * 0.4), // Fade out as adjacent song appears
-                 child: _buildAlbumArtWidget(currentSong, isCurrentSong: true),
+   Widget _buildAlbumArtImage(MediaItem song) {
+     return ClipOval(
+       child: song.artUri != null
+           ? Image.file(
+               File(song.artUri!.toFilePath()),
+               width: 300,
+               height: 300,
+               fit: BoxFit.cover,
+               cacheWidth: 300,
+               cacheHeight: 300,
+               errorBuilder: (context, error, stackTrace) {
+                 return Container(
+                   width: 300,
+                   height: 300,
+                   color: Colors.grey[800],
+                   child: const Icon(
+                     Icons.music_note,
+                     color: Colors.white,
+                     size: 120,
+                   ),
+                 );
+               },
+             )
+           : Container(
+               width: 300,
+               height: 300,
+               color: Colors.grey[800],
+               child: const Icon(
+                 Icons.music_note,
+                 color: Colors.white,
+                 size: 120,
                ),
              ),
-             
-             // Next song album art (slides in from right when swiping left)
-             if (_swipeProgress > 0 && _swipeDirection < 0 && _nextSong != null)
-               Transform.translate(
-                 offset: Offset(300 * (1.0 - _swipeProgress), 0),
-                 child: Opacity(
-                   opacity: _swipeProgress * 0.9,
-                   child: _buildAlbumArtWidget(_nextSong!, isCurrentSong: false),
+     );
+   }
+   
+   Widget _buildSwipeableAlbumSection(MediaItem currentSong) {
+     return RepaintBoundary(
+       child: Center(
+         child: SizedBox(
+           width: 300,
+           height: 300,
+           child: Stack(
+             alignment: Alignment.center,
+             children: [
+               // Current album art (moves with swipe)
+               RepaintBoundary(
+                 child: Transform.translate(
+                   offset: Offset(
+                     _swipeDirection.sign * _swipeProgress * 300, 
+                     0
+                   ),
+                   child: Opacity(
+                     opacity: (1.0 - (_swipeProgress * 0.4)).clamp(0.0, 1.0),
+                     child: _buildAlbumArtWidget(currentSong, isCurrentSong: true),
+                   ),
                  ),
                ),
-             
-             // Previous song album art (slides in from left when swiping right)
-             if (_swipeProgress > 0 && _swipeDirection > 0 && _previousSong != null)
-               Transform.translate(
-                 offset: Offset(-300 * (1.0 - _swipeProgress), 0),
-                 child: Opacity(
-                   opacity: _swipeProgress * 0.9,
-                   child: _buildAlbumArtWidget(_previousSong!, isCurrentSong: false),
+               
+               // Next song album art (slides in from right when swiping left)
+               if (_swipeProgress > 0.02 && _swipeDirection < 0 && _nextSong != null)
+                 RepaintBoundary(
+                   child: Transform.translate(
+                     offset: Offset(300 * (1.0 - _swipeProgress), 0),
+                     child: Opacity(
+                       opacity: (_swipeProgress * 1.1).clamp(0.0, 1.0), // Increased opacity for better visibility
+                       child: Container(
+                         decoration: _swipeProgress >= 0.3 
+                             ? BoxDecoration(
+                                 shape: BoxShape.circle,
+                                 border: Border.all(
+                                   color: const Color(0xFF00E676),
+                                   width: 3,
+                                 ),
+                               )
+                             : null,
+                         child: _buildAlbumArtWidget(_nextSong!, isCurrentSong: false),
+                       ),
+                     ),
+                   ),
                  ),
-               ),
-           ],
+               
+               // Previous song album art (slides in from left when swiping right)
+               if (_swipeProgress > 0.02 && _swipeDirection > 0 && _previousSong != null)
+                 RepaintBoundary(
+                   child: Transform.translate(
+                     offset: Offset(-300 * (1.0 - _swipeProgress), 0),
+                     child: Opacity(
+                       opacity: (_swipeProgress * 1.1).clamp(0.0, 1.0), // Increased opacity for better visibility
+                       child: Container(
+                         decoration: _swipeProgress >= 0.3 
+                             ? BoxDecoration(
+                                 shape: BoxShape.circle,
+                                 border: Border.all(
+                                   color: const Color(0xFF00E676),
+                                   width: 3,
+                                 ),
+                               )
+                             : null,
+                         child: _buildAlbumArtWidget(_previousSong!, isCurrentSong: false),
+                       ),
+                     ),
+                   ),
+                 ),
+             ],
+           ),
          ),
        ),
      );
    }
    
    Widget _buildSwipeableSongInfo(MediaItem currentSong) {
-     return Padding(
-       padding: const EdgeInsets.symmetric(horizontal: 32),
-       child: SizedBox(
-         height: 100,
-         child: Stack(
-           alignment: Alignment.center,
-           children: [
-             // Current song info (moves with swipe)
-             Transform.translate(
-               offset: Offset(_swipeDirection * _swipeProgress * 300, 0),
-               child: Opacity(
-                 opacity: 1.0 - (_swipeProgress * 0.4),
-                 child: _buildSongInfoWidget(currentSong),
-               ),
-             ),
-             
-             // Next song info (slides in from right when swiping left)
-             if (_swipeProgress > 0 && _swipeDirection < 0 && _nextSong != null)
-               Transform.translate(
-                 offset: Offset(300 * (1.0 - _swipeProgress), 0),
-                 child: Opacity(
-                   opacity: _swipeProgress * 0.9,
-                   child: _buildSongInfoWidget(_nextSong!),
+     return RepaintBoundary(
+       child: Padding(
+         padding: const EdgeInsets.symmetric(horizontal: 32),
+         child: SizedBox(
+           height: 100,
+           child: Stack(
+             alignment: Alignment.center,
+             children: [
+               // Current song info (moves with swipe)
+               RepaintBoundary(
+                 child: Transform.translate(
+                   offset: Offset(
+                     _swipeDirection.sign * _swipeProgress * 300, 
+                     0
+                   ),
+                   child: Opacity(
+                     opacity: (1.0 - (_swipeProgress * 0.4)).clamp(0.0, 1.0),
+                     child: _buildSongInfoWidget(currentSong),
+                   ),
                  ),
                ),
-             
-             // Previous song info (slides in from left when swiping right)
-             if (_swipeProgress > 0 && _swipeDirection > 0 && _previousSong != null)
-               Transform.translate(
-                 offset: Offset(-300 * (1.0 - _swipeProgress), 0),
-                 child: Opacity(
-                   opacity: _swipeProgress * 0.9,
-                   child: _buildSongInfoWidget(_previousSong!),
+               
+               // Next song info (slides in from right when swiping left)
+               if (_swipeProgress > 0.02 && _swipeDirection < 0 && _nextSong != null)
+                 RepaintBoundary(
+                   child: Transform.translate(
+                     offset: Offset(300 * (1.0 - _swipeProgress), 0),
+                     child: Opacity(
+                       opacity: (_swipeProgress * 1.1).clamp(0.0, 1.0), // More visible
+                       child: _buildSongInfoWidget(_nextSong!),
+                     ),
+                   ),
                  ),
-               ),
-           ],
+               
+               // Previous song info (slides in from left when swiping right)
+               if (_swipeProgress > 0.02 && _swipeDirection > 0 && _previousSong != null)
+                 RepaintBoundary(
+                   child: Transform.translate(
+                     offset: Offset(-300 * (1.0 - _swipeProgress), 0),
+                     child: Opacity(
+                       opacity: (_swipeProgress * 1.1).clamp(0.0, 1.0), // More visible
+                       child: _buildSongInfoWidget(_previousSong!),
+                     ),
+                   ),
+                 ),
+             ],
+           ),
          ),
        ),
      );
