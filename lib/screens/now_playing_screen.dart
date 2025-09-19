@@ -223,6 +223,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
             child: SlideTransition(
             position: _slideAnimation,
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 // Header with blur effect
                 ClipRRect(
@@ -280,20 +281,25 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
             // Progress bar and Controls (combined section)
             Expanded(
               flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 20),
                     // Progress bar
-                    StreamBuilder<Duration>(
-                      stream: audioHandler.positionStream,
-                      builder: (context, snapshot) {
+                    Flexible(
+                      child: StreamBuilder<Duration>(
+                        stream: audioHandler.positionStream,
+                        builder: (context, snapshot) {
                         final streamPosition = snapshot.data ?? Duration.zero;
                         final position = _isDraggingSlider ? _sliderPosition : streamPosition;
                         final duration = currentSong.duration ?? Duration.zero;
                         
                         return Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             SliderTheme(
                               data: SliderTheme.of(context).copyWith(
@@ -331,6 +337,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 },
                               ),
                             ),
+                            const SizedBox(height: 4),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -352,15 +359,17 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                             ),
                           ],
                         );
-                      },
+                        },
+                      ),
                     ),
                     
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     
                     // Main controls (moved closer to progress bar)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
+                    Flexible(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
                         IconButton(
                           onPressed: () => audioHandler.skipToPrevious(),
                           icon: const Icon(Icons.skip_previous, color: Colors.white),
@@ -413,14 +422,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           iconSize: 50, // Increased by 15% from 44 (44 * 1.15 = 50.6 ≈ 50)
                         ),
                       ],
+                      ),
                     ),
                     
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     
                     // Secondary controls (moved closer to main controls)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
+                    Flexible(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
                         Consumer(
                           builder: (context, ref, child) {
                             final playbackState = ref.watch(playbackStateProvider).value;
@@ -564,8 +575,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           },
                         ),
                       ],
+                      ),
                     ),
-                  ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
