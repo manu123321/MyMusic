@@ -333,8 +333,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
-              transform: Matrix4.translationValues(0, _isSearchFocused ? -20 : 0, 0),
-              margin: EdgeInsets.zero,
+              transform: Matrix4.translationValues(0, 0, 0),
+              margin: EdgeInsets.only(top: _isSearchFocused ? 20 : 0),
                 child: _isLoading
                 ? const Center(
                     child: Padding(
