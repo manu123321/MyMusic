@@ -1002,6 +1002,17 @@ final favoriteSongsProvider = Provider<List<Song>>((ref) {
   }
 });
 
+// Liked Songs playlist
+final likedSongsPlaylistProvider = Provider<Playlist?>((ref) {
+  try {
+    final playlistsNotifier = ref.read(playlistsProvider.notifier);
+    return playlistsNotifier.getPlaylistById('liked_songs');
+  } catch (e) {
+    ref.read(loggingServiceProvider).logError('Failed to get liked songs playlist', e);
+    return null;
+  }
+});
+
 // User playlists
 final userPlaylistsProvider = Provider<List<Playlist>>((ref) {
   try {

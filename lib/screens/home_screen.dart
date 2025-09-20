@@ -566,9 +566,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildPlaylistCardsSection() {
     final playlists = ref.watch(playlistsProvider);
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
+    final likedSongsPlaylist = playlists.firstWhere(
+      (p) => p.name == 'Liked Songs' && p.isSystemPlaylist,
+      orElse: () => Playlist.system(name: 'Liked Songs'),
+    );
+    
+    // Show liked songs only if it has songs
+    final shouldShowLikedSongs = likedSongsPlaylist.songIds.isNotEmpty;
     
     // Don't show anything if there are no playlists or if searching
-    if (userPlaylists.isEmpty || _isSearching) {
+    if ((userPlaylists.isEmpty && !shouldShowLikedSongs) || _isSearching) {
       return const SizedBox.shrink();
     }
 
@@ -588,9 +595,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
           ),
-          itemCount: userPlaylists.length, // Show all playlists
+          itemCount: userPlaylists.length + (shouldShowLikedSongs ? 1 : 0),
           itemBuilder: (context, index) {
-            final playlist = userPlaylists[index];
+            // Show liked songs first if it has songs
+            if (shouldShowLikedSongs && index == 0) {
+              return _buildSpotifyStylePlaylistCard(likedSongsPlaylist);
+            }
+            
+            // Adjust index for user playlists
+            final playlistIndex = shouldShowLikedSongs ? index - 1 : index;
+            final playlist = userPlaylists[playlistIndex];
             return _buildSpotifyStylePlaylistCard(playlist);
           },
         ),
@@ -621,29 +635,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   bottomLeft: Radius.circular(6),
                 ),
               ),
-              child: playlist.coverArtPath != null
-                  ? ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(6),
-                        bottomLeft: Radius.circular(6),
-                      ),
-                      child: Image.asset(
-                        playlist.coverArtPath!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.music_note,
-                            color: Colors.grey[400],
-                            size: 24,
-                          );
-                        },
-                      ),
-                    )
-                  : Icon(
-                      Icons.music_note,
-                      color: Colors.grey[400],
+              child: playlist.name == 'Liked Songs'
+                  ? Icon(
+                      Icons.favorite,
+                      color: Colors.red[400],
                       size: 24,
-                    ),
+                    )
+                  : playlist.coverArtPath != null
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(6),
+                            bottomLeft: Radius.circular(6),
+                          ),
+                          child: Image.asset(
+                            playlist.coverArtPath!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.music_note,
+                                color: Colors.grey[400],
+                                size: 24,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          Icons.music_note,
+                          color: Colors.grey[400],
+                          size: 24,
+                        ),
             ),
             // Playlist name on the right
             Expanded(
@@ -670,7 +690,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _shouldShowPlaylistsSection() {
     final playlists = ref.watch(playlistsProvider);
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
-    return userPlaylists.isNotEmpty && !_isSearching;
+    final likedSongsPlaylist = playlists.firstWhere(
+      (p) => p.name == 'Liked Songs' && p.isSystemPlaylist,
+      orElse: () => Playlist.system(name: 'Liked Songs'),
+    );
+    final shouldShowLikedSongs = likedSongsPlaylist.songIds.isNotEmpty;
+    
+    return (userPlaylists.isNotEmpty || shouldShowLikedSongs) && !_isSearching;
   }
 
   void _showCreatePlaylistDialog() {

@@ -154,14 +154,15 @@ class StorageService {
         _playlistCache['most_played'] = mostPlayed;
       }
       
-      // Favorites
-      if (!_playlistsBox!.containsKey('favorites')) {
-        final favorites = Playlist.system(
-          name: 'Favorites',
-          description: 'Your favorite songs',
+      // Liked Songs
+      if (!_playlistsBox!.containsKey('liked_songs')) {
+        final likedSongs = Playlist.system(
+          name: 'Liked Songs',
+          description: 'Your liked songs',
+          colorTheme: '#FF0040', // Red color for heart
         );
-        await _playlistsBox!.put('favorites', favorites);
-        _playlistCache['favorites'] = favorites;
+        await _playlistsBox!.put('liked_songs', likedSongs);
+        _playlistCache['liked_songs'] = likedSongs;
       }
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to create default playlists', e, stackTrace);
@@ -486,6 +487,77 @@ class StorageService {
       }
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to update most played', e, stackTrace);
+    }
+  }
+
+  // Liked songs management
+  Future<void> addToLikedSongs(String songId) async {
+    try {
+      final likedSongs = getPlaylist('liked_songs');
+      if (likedSongs != null) {
+        final updatedSongIds = List<String>.from(likedSongs.songIds);
+        
+        // Add if not already present
+        if (!updatedSongIds.contains(songId)) {
+          updatedSongIds.add(songId);
+          
+          final updatedPlaylist = likedSongs.copyWith(
+            songIds: updatedSongIds,
+            dateModified: DateTime.now(),
+          );
+          
+          await savePlaylist(updatedPlaylist);
+          _loggingService.logDebug('Added song to liked songs: $songId');
+        }
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to add to liked songs: $songId', e, stackTrace);
+    }
+  }
+
+  Future<void> removeFromLikedSongs(String songId) async {
+    try {
+      final likedSongs = getPlaylist('liked_songs');
+      if (likedSongs != null) {
+        final updatedSongIds = List<String>.from(likedSongs.songIds);
+        
+        // Remove if present
+        if (updatedSongIds.remove(songId)) {
+          final updatedPlaylist = likedSongs.copyWith(
+            songIds: updatedSongIds,
+            dateModified: DateTime.now(),
+          );
+          
+          await savePlaylist(updatedPlaylist);
+          _loggingService.logDebug('Removed song from liked songs: $songId');
+        }
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to remove from liked songs: $songId', e, stackTrace);
+    }
+  }
+
+  Future<void> updateLikedSongs() async {
+    try {
+      final likedSongs = getPlaylist('liked_songs');
+      if (likedSongs != null) {
+        // Get all favorite songs
+        final allSongs = getAllSongs();
+        final favoriteSongIds = allSongs
+            .where((song) => song.isFavorite)
+            .map((song) => song.id)
+            .toList();
+        
+        final updatedPlaylist = likedSongs.copyWith(
+          songIds: favoriteSongIds,
+          dateModified: DateTime.now(),
+        );
+        
+        await savePlaylist(updatedPlaylist);
+        _loggingService.logDebug('Updated liked songs playlist with ${favoriteSongIds.length} songs');
+      }
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to update liked songs', e, stackTrace);
     }
   }
 

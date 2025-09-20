@@ -70,8 +70,8 @@ class _SongListTileState extends ConsumerState<SongListTile>
             borderRadius: BorderRadius.circular(8),
             onTap: _isLoading ? null : (widget.onTap ?? _playSong),
             onLongPress: _isLoading ? null : (widget.onMorePressed ?? _showSongOptions),
-            splashColor: const Color(0xFF00E676).withOpacity(0.2),
-            highlightColor: const Color(0xFF00E676).withOpacity(0.1),
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               child: Row(
@@ -495,16 +495,23 @@ class _SongListTileState extends ConsumerState<SongListTile>
       final updatedSong = widget.song.toggleFavorite();
       ref.read(songsProvider.notifier).updateSong(updatedSong);
 
+      // Update liked songs playlist
+      if (updatedSong.isFavorite) {
+        ref.read(storageServiceProvider).addToLikedSongs(updatedSong.id);
+      } else {
+        ref.read(storageServiceProvider).removeFromLikedSongs(updatedSong.id);
+      }
+
       _loggingService.logInfo('Toggled favorite for: ${widget.song.title}');
 
       _showSuccessSnackBar(
           widget.song.isFavorite
-              ? 'Removed from favorites'
-              : 'Added to favorites'
+              ? 'Removed from liked songs'
+              : 'Added to liked songs'
       );
     } catch (e, stackTrace) {
       _loggingService.logError('Error toggling favorite', e, stackTrace);
-      _showErrorSnackBar('Failed to update favorites');
+      _showErrorSnackBar('Failed to update liked songs');
     }
   }
 
@@ -521,47 +528,130 @@ class _SongListTileState extends ConsumerState<SongListTile>
 
 
   void _showSongInfoDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        title: const Text(
-          'Song Information',
-          style: TextStyle(color: Colors.white),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[600],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Song info with album art
+            _buildSongInfoHeader(),
+            const SizedBox(height: 24),
+
+            // Song details
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow('Title', widget.song.title),
+                    _buildInfoRow('Artist', widget.song.artist),
+                    _buildInfoRow('Album', widget.song.album),
+                    if (widget.song.genre != null)
+                      _buildInfoRow('Genre', widget.song.genre!),
+                    if (widget.song.year != null)
+                      _buildInfoRow('Year', widget.song.year.toString()),
+                    if (widget.song.trackNumber != null)
+                      _buildInfoRow('Track', widget.song.trackNumber.toString()),
+                    _buildInfoRow('Duration', widget.song.formattedDuration),
+                    _buildInfoRow('File size', widget.song.formattedFileSize),
+                    _buildInfoRow('Bitrate', '${widget.song.bitrate} kbps'),
+                    _buildInfoRow('Date added', widget.song.dateAdded.toString().split(' ')[0]),
+                    if (widget.song.lastPlayed != null)
+                      _buildInfoRow('Last played', widget.song.lastPlayed.toString().split(' ')[0]),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        content: SingleChildScrollView(
+      ),
+    );
+  }
+
+  Widget _buildSongInfoHeader() {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: widget.song.albumArtPath != null
+              ? Image.file(
+            File(widget.song.albumArtPath!),
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildDefaultAlbumArt(80);
+            },
+          )
+              : _buildDefaultAlbumArt(80),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildInfoRow('Title', widget.song.title),
-              _buildInfoRow('Artist', widget.song.artist),
-              _buildInfoRow('Album', widget.song.album),
-              if (widget.song.genre != null)
-                _buildInfoRow('Genre', widget.song.genre!),
-              if (widget.song.year != null)
-                _buildInfoRow('Year', widget.song.year.toString()),
-              if (widget.song.trackNumber != null)
-                _buildInfoRow('Track', widget.song.trackNumber.toString()),
-              _buildInfoRow('Duration', widget.song.formattedDuration),
-              _buildInfoRow('File size', widget.song.formattedFileSize),
-              _buildInfoRow('Bitrate', '${widget.song.bitrate} kbps'),
-              _buildInfoRow('Date added', widget.song.dateAdded.toString().split(' ')[0]),
-              if (widget.song.lastPlayed != null)
-                _buildInfoRow('Last played', widget.song.lastPlayed.toString().split(' ')[0]),
+              Text(
+                'Song Information',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.song.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.song.artist,
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (widget.song.album.isNotEmpty)
+                Text(
+                  widget.song.album,
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
