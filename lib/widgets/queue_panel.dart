@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../models/song.dart';
 import '../services/logging_service.dart';
+import 'sleep_timer_dialog.dart';
 
 class QueuePanel extends ConsumerStatefulWidget {
   const QueuePanel({super.key});
@@ -107,24 +109,39 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         Row(
           children: [
             // Shuffle queue button
-            Container(
-              decoration: BoxDecoration(
-                color: queueLength > 1 ? Colors.grey[800] : Colors.grey[900],
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: IconButton(
-                onPressed: queueLength > 1 ? _shuffleQueue : null,
-                icon: Icon(
-                  Icons.shuffle,
-                  color: queueLength > 1 ? Colors.white : Colors.grey[600],
-                  size: 18,
-                ),
-                tooltip: 'Shuffle queue',
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-              ),
+            Consumer(
+              builder: (context, ref, child) {
+                final playbackState = ref.watch(playbackStateProvider);
+                final isShuffleEnabled = playbackState.when(
+                  data: (state) => state.shuffleMode == AudioServiceRepeatMode.all,
+                  loading: () => false,
+                  error: (_, __) => false,
+                );
+                
+                return Container(
+                  decoration: BoxDecoration(
+                    color: queueLength > 1 
+                        ? (isShuffleEnabled ? Colors.green : Colors.grey[800])
+                        : Colors.grey[900],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: IconButton(
+                    onPressed: queueLength > 1 ? _toggleShuffle : null,
+                    icon: Icon(
+                      Icons.shuffle,
+                      color: queueLength > 1 
+                          ? (isShuffleEnabled ? Colors.white : Colors.grey[400])
+                          : Colors.grey[600],
+                      size: 18,
+                    ),
+                    tooltip: isShuffleEnabled ? 'Disable shuffle' : 'Enable shuffle',
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                  ),
+                );
+              },
             ),
             
             const SizedBox(width: 8),
@@ -135,18 +152,31 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                 color: Colors.grey[800],
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: IconButton(
-                onPressed: _showSleepTimerDialog,
-                icon: Icon(
-                  Icons.bedtime,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                tooltip: 'Sleep timer',
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final playbackSettings = ref.watch(playbackSettingsProvider);
+                  final isTimerActive = playbackSettings.sleepTimerEnabled;
+                  
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isTimerActive ? Colors.green : Colors.grey[800],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: IconButton(
+                      onPressed: _showSleepTimerDialog,
+                      icon: Icon(
+                        Icons.timer_outlined,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      tooltip: 'Sleep timer',
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -222,6 +252,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     return ReorderableListView.builder(
       itemCount: orderedQueue.length,
       onReorder: _onReorder,
+      proxyDecorator: _proxyDecorator,
+      buildDefaultDragHandles: false,
       itemBuilder: (context, index) {
         final song = orderedQueue[index];
         final isCurrentSong = currentSong?.id == song.id;
@@ -250,13 +282,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       key: key,
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
-        color: isCurrentSong 
-            ? const Color(0xFF00E676).withOpacity(0.15)
-            : Colors.transparent,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        border: isCurrentSong
-            ? Border.all(color: const Color(0xFF00E676).withOpacity(0.3), width: 1)
-            : null,
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -299,43 +326,63 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Playing indicator
+            // Play/Pause button for current song
             if (isCurrentSong)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00E676),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'NOW PLAYING',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(right: 2.5), // Reduced by 50% from 5
+                child: Consumer(
+                  builder: (context, ref, child) {
+                    final playbackState = ref.watch(playbackStateProvider);
+                    final isPlaying = playbackState.when(
+                      data: (state) => state.playing,
+                      loading: () => false,
+                      error: (_, __) => false,
+                    );
+                    
+                    return Container(
+                      width: 34, // Reduced by 15% from 40
+                      height: 34, // Reduced by 15% from 40
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          if (isPlaying) {
+                            audioHandler.pause();
+                          } else {
+                            audioHandler.play();
+                          }
+                        },
+                        icon: Icon(
+                          isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.black,
+                          size: 17, // Reduced proportionally
+                        ),
+                        padding: EdgeInsets.zero,
+                        tooltip: isPlaying ? 'Pause' : 'Play',
+                      ),
+                    );
+                  },
                 ),
               ),
             
             const SizedBox(width: 8),
             
-            // Reorder handle (always visible for direct reordering)
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(20),
+            // Three dash queue icon for reordering (only for non-current songs)
+            if (!isCurrentSong)
+              ReorderableDragStartListener(
+                index: index,
+                child: Icon(
+                  Icons.queue_music,
+                  color: Colors.white,
+                  size: 23, // Increased by 15% from 20
+                ),
               ),
-              child: Icon(
-                Icons.drag_handle,
-                color: Colors.grey[300],
-                size: 18,
-              ),
-            ),
           ],
         ),
-        onTap: () => _jumpToSong(index, audioHandler),
+        onTap: isCurrentSong ? null : () => _jumpToSong(index, audioHandler),
       ),
     );
   }
@@ -366,45 +413,34 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
 
   void _showSleepTimerDialog() {
     HapticFeedback.lightImpact();
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.bedtime, color: Color(0xFF00E676)),
-            SizedBox(width: 8),
-            Text(
-              'Sleep Timer',
-              style: TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Set a timer to stop playback after a certain amount of time.',
-          style: TextStyle(color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => const SleepTimerBottomSheet(),
+    );
+  }
+
+  Widget _proxyDecorator(Widget child, int index, Animation<double> animation) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final double animValue = Curves.easeInOut.transform(animation.value);
+        final double elevation = lerpDouble(0, 6, animValue)!;
+        final double scale = lerpDouble(1, 1.02, animValue)!;
+        
+        return Transform.scale(
+          scale: scale,
+          child: Material(
+            elevation: elevation,
+            color: Colors.transparent,
+            shadowColor: Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+            child: child,
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Implement sleep timer functionality
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E676),
-              foregroundColor: Colors.black,
-            ),
-            child: const Text('Set Timer'),
-          ),
-        ],
-      ),
+        );
+      },
+      child: child,
     );
   }
 
@@ -503,21 +539,26 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   }
 
 
-  void _shuffleQueue() {
+  void _toggleShuffle() {
     try {
       final audioHandler = ref.read(audioHandlerProvider);
-      audioHandler.setShuffleModeEnabled(true);
-      _loggingService.logInfo('Shuffling queue');
+      final playbackState = ref.read(playbackStateProvider).value;
+      final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceRepeatMode.all;
+      
+      // Toggle shuffle mode
+      audioHandler.setShuffleModeEnabled(!isShuffleEnabled);
+      
+      _loggingService.logInfo('Toggled shuffle mode: ${!isShuffleEnabled}');
       HapticFeedback.mediumImpact();
       
       // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
-      _loggingService.logError('Error shuffling queue', e, stackTrace);
+      _loggingService.logError('Error toggling shuffle', e, stackTrace);
       
       // Only show error snackbar for failures
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Failed to shuffle queue', style: TextStyle(color: Colors.black)),
+          content: const Text('Failed to toggle shuffle', style: TextStyle(color: Colors.black)),
           backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
