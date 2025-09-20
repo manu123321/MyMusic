@@ -220,10 +220,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                   ),
                                   child: IntrinsicHeight(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Spacer(),
+                                        // Add top spacing to push content away from search bar/back button
+                                        SizedBox(height: isVeryCompact ? 40 : (isCompact ? 60 : 80)),
                                         
                                         // Playlist icon with composite album art
                                         CompositeAlbumArt(
@@ -349,6 +350,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                             ),
                                           ],
                                         ),
+                                        
+                                        // Add bottom spacing for visual balance
+                                        SizedBox(height: isVeryCompact ? 20 : (isCompact ? 30 : 40)),
                                       ],
                                     ),
                                   ),
