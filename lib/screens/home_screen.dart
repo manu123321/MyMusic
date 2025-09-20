@@ -5,13 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
-import '../widgets/playlist_card.dart';
+import '../widgets/composite_album_art.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
 import '../services/custom_audio_handler.dart';
-import '../services/storage_service.dart';
 import '../services/logging_service.dart';
-import 'now_playing_screen.dart';
 import 'create_playlist_screen.dart';
 import 'playlist_detail_screen.dart';
 
@@ -626,47 +624,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         child: Row(
           children: [
             // Small square image on the left
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: playlist.colorTheme != null 
-                    ? Color(int.parse(playlist.colorTheme!.substring(1), radix: 16) + 0xFF000000)
-                    : Colors.grey[700],
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(6),
-                  bottomLeft: Radius.circular(6),
-                ),
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                bottomLeft: Radius.circular(6),
               ),
               child: playlist.name == 'Liked Songs'
-                  ? Icon(
-                      Icons.favorite,
-                      color: Colors.red[400],
-                      size: 24,
+                  ? Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: playlist.colorTheme != null 
+                            ? Color(int.parse(playlist.colorTheme!.substring(1), radix: 16) + 0xFF000000)
+                            : Colors.red[400],
+                      ),
+                      child: Icon(
+                        Icons.favorite,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     )
-                  : playlist.coverArtPath != null
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(6),
-                            bottomLeft: Radius.circular(6),
-                          ),
-                          child: Image.asset(
-                            playlist.coverArtPath!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.music_note,
-                                color: Colors.grey[400],
-                                size: 24,
-                              );
-                            },
-                          ),
-                        )
-                      : Icon(
-                          Icons.music_note,
-                          color: Colors.grey[400],
-                          size: 24,
-                        ),
+                  : _buildPlaylistIcon(playlist),
             ),
             // Playlist name on the right
             Expanded(
@@ -717,6 +695,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       MaterialPageRoute(
         builder: (context) => PlaylistDetailScreen(playlist: playlist),
       ),
+    );
+  }
+
+  Widget _buildPlaylistIcon(Playlist playlist) {
+    // Get songs for this playlist to show composite album art
+    final songs = ref.read(storageServiceProvider).getSongsByIds(playlist.songIds);
+    
+    return CompositeAlbumArt(
+      songs: songs,
+      size: 50,
+      borderRadius: 0, // BorderRadius is handled by parent ClipRRect
     );
   }
 }

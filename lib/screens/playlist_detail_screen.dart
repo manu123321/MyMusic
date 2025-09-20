@@ -7,7 +7,7 @@ import '../models/song.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
 import '../widgets/mini_player.dart';
-import 'now_playing_screen.dart';
+import '../widgets/composite_album_art.dart';
 
 class PlaylistDetailScreen extends ConsumerStatefulWidget {
   final Playlist playlist;
@@ -225,31 +225,56 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                       children: [
                                         const Spacer(),
                                         
-                                        // Playlist icon
-                                        Container(
-                                          width: isVeryCompact ? 60 : (isCompact ? 80 : 120),
-                                          height: isVeryCompact ? 60 : (isCompact ? 80 : 120),
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey[800],
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.3),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 5),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Icon(
-                                            Icons.playlist_play,
-                                            color: Colors.white,
-                                            size: isVeryCompact ? 24 : (isCompact ? 32 : 48),
-                                          ),
+                                        // Playlist icon with composite album art
+                                        CompositeAlbumArt(
+                                          songs: _songs,
+                                          size: isVeryCompact ? 60 : (isCompact ? 80 : 120),
+                                          borderRadius: 12,
                                         ),
                                         
-                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
+                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 16)),
+                                        
+                                        // Playlist title and info
+                                        if (!isVeryCompact) ...[
+                                          Text(
+                                            widget.playlist.name,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: isCompact ? 20 : 28,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          
+                                          if (widget.playlist.description?.isNotEmpty == true)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                widget.playlist.description!,
+                                                style: TextStyle(
+                                                  color: Colors.grey[400],
+                                                  fontSize: isCompact ? 12 : 14,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 8),
+                                            child: Text(
+                                              '${_songs.length} ${_songs.length == 1 ? 'song' : 'songs'}',
+                                              style: TextStyle(
+                                                color: Colors.grey[500],
+                                                fontSize: isCompact ? 12 : 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
 
-                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 24)),
+                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 16)),
                                         
                                         // Play buttons
                                         Row(

@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import '../providers/music_provider.dart';
 import '../widgets/song_list_tile.dart';
+import '../widgets/composite_album_art.dart';
 import '../models/playlist.dart';
 import '../models/song.dart';
 import '../services/custom_audio_handler.dart';
-import '../services/storage_service.dart';
 import '../screens/now_playing_screen.dart';
 import '../screens/create_playlist_screen.dart';
 
@@ -287,19 +287,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   }
 
   Widget _buildPlaylistTile(Playlist playlist) {
+    // Get songs for this playlist to show composite album art
+    final songs = ref.read(storageServiceProvider).getSongsByIds(playlist.songIds);
+    
     return ListTile(
-      leading: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.grey[800],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          Icons.playlist_play,
-          color: Colors.white,
-          size: 24,
-        ),
+      leading: CompositeAlbumArt(
+        songs: songs,
+        size: 56,
+        borderRadius: 8,
       ),
       title: Text(
         playlist.name,

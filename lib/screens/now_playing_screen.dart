@@ -8,6 +8,8 @@ import '../providers/music_provider.dart';
 import '../services/logging_service.dart';
 import '../widgets/sleep_timer_dialog.dart';
 import '../widgets/queue_panel.dart';
+import '../widgets/add_to_playlist_sheet.dart';
+import '../models/song.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});
@@ -634,6 +636,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   }
   
   void _showMoreOptions() {
+    final currentSong = ref.read(currentSongProvider).value;
+    if (currentSong == null) return;
+    
+    final song = _mediaItemToSong(currentSong);
+    if (song == null) return;
+
+    HapticFeedback.selectionClick();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -643,7 +653,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           color: Colors.grey[900],
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -656,40 +666,60 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
+            const SizedBox(height: 16),
+
+            // Song info
+            _buildSongHeader(song),
             const SizedBox(height: 24),
-            
+
             // Options
+            Consumer(
+              builder: (context, ref, child) {
+                final favorites = ref.watch(favoritesProvider);
+                final isFavorite = favorites.contains(song.id);
+                
+                return _buildOptionTile(
+                  icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+                  title: isFavorite ? 'Remove from liked songs' : 'Add to liked songs',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _toggleFavorite(song);
+                  },
+                );
+              },
+            ),
             _buildOptionTile(
-              icon: Icons.favorite_border,
-              title: 'Add to Favorites',
+              icon: Icons.queue_music,
+              title: 'Add to queue',
               onTap: () {
                 Navigator.pop(context);
-                _addToFavorites();
+                _addToQueue(song);
               },
             ),
             _buildOptionTile(
               icon: Icons.playlist_add,
-              title: 'Add to Playlist',
+              title: 'Add to playlist',
               onTap: () {
                 Navigator.pop(context);
-                _showAddToPlaylistDialog();
-              },
-            ),
-            _buildOptionTile(
-              icon: Icons.share,
-              title: 'Share',
-              onTap: () {
-                Navigator.pop(context);
-                _shareSong();
+                _showAddToPlaylistDialog(song);
               },
             ),
             _buildOptionTile(
               icon: Icons.info_outline,
-              title: 'Song Info',
+              title: 'Song info',
               onTap: () {
                 Navigator.pop(context);
-                _showSongInfo();
+                _showSongInfoDialog(song);
               },
+            ),
+            _buildOptionTile(
+              icon: Icons.remove_circle_outline,
+              title: 'Remove from library',
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteConfirmation(song);
+              },
+              isDestructive: true,
             ),
           ],
         ),
@@ -701,12 +731,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white),
+      leading: Icon(
+        icon,
+        color: isDestructive ? Colors.red : Colors.white,
+      ),
       title: Text(
         title,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(
+          color: isDestructive ? Colors.red : Colors.white,
+        ),
       ),
       onTap: onTap,
       shape: RoundedRectangleBorder(
@@ -714,21 +750,452 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       ),
     );
   }
-  
-  void _addToFavorites() {
-    _showSnackBar('Added to favorites', Colors.green);
+
+  /// Helper method to convert MediaItem back to Song object
+  Song? _mediaItemToSong(MediaItem mediaItem) {
+    try {
+      final extras = mediaItem.extras ?? {};
+      
+      return Song(
+        id: extras['songId'] ?? mediaItem.id,
+        title: mediaItem.title,
+        artist: mediaItem.artist ?? 'Unknown Artist',
+        album: mediaItem.album ?? 'Unknown Album',
+        filePath: mediaItem.id,
+        duration: mediaItem.duration?.inMilliseconds ?? 0,
+        albumArtPath: mediaItem.artUri?.toFilePath(),
+        trackNumber: extras['trackNumber'],
+        year: extras['year'],
+        genre: extras['genre'],
+        dateAdded: DateTime.now(), // We don't have this in MediaItem
+        isFavorite: extras['isFavorite'] ?? false,
+      );
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error converting MediaItem to Song', e, stackTrace);
+      return null;
+    }
+  }
+
+  Widget _buildSongHeader(Song song) {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: song.albumArtPath != null
+              ? Image.file(
+            File(song.albumArtPath!),
+            width: 64,
+            height: 64,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildDefaultAlbumArt(64);
+            },
+          )
+              : _buildDefaultAlbumArt(64),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                song.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                song.artist,
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (song.album.isNotEmpty)
+                Text(
+                  song.album,
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultAlbumArt([double size = 56]) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Icon(
+        Icons.music_note_rounded,
+        color: Colors.white,
+        size: size * 0.4,
+      ),
+    );
+  }
+
+  void _toggleFavorite(Song song) {
+    try {
+      HapticFeedback.lightImpact();
+
+      final favorites = ref.read(favoritesProvider);
+      final isCurrentlyFavorite = favorites.contains(song.id);
+
+      // Use the centralized favorites management
+      ref.read(favoritesProvider.notifier).toggleFavorite(song.id);
+
+      _loggingService.logInfo('Toggled favorite for: ${song.title}');
+
+      _showSuccessSnackBar(
+          !isCurrentlyFavorite
+              ? 'Added to liked songs'
+              : 'Removed from liked songs'
+      );
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error toggling favorite', e, stackTrace);
+      _showErrorSnackBar('Failed to update liked songs');
+    }
+  }
+
+  void _addToQueue(Song song) {
+    try {
+      HapticFeedback.lightImpact();
+      
+      final audioHandler = ref.read(audioHandlerProvider);
+      final queue = ref.read(queueProvider).value ?? [];
+      final currentSong = ref.read(currentSongProvider).value;
+      
+      // Convert song to MediaItem
+      final mediaItem = MediaItem(
+        id: song.filePath,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: Duration(milliseconds: song.duration),
+        artUri: song.albumArtPath != null ? Uri.file(song.albumArtPath!) : null,
+        extras: {
+          'songId': song.id,
+          'trackNumber': song.trackNumber,
+          'year': song.year,
+          'genre': song.genre,
+          'isFavorite': song.isFavorite,
+        },
+      );
+      
+      // Add to queue next to current playing song
+      if (currentSong != null && queue.isNotEmpty) {
+        final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+        if (currentIndex != -1) {
+          // Add after current song (next position)
+          audioHandler.addQueueItemAt(mediaItem, currentIndex + 1);
+        } else {
+          // Fallback to end of queue
+          audioHandler.addQueueItem(mediaItem);
+        }
+      } else {
+        // No current song or empty queue, add to end
+        audioHandler.addQueueItem(mediaItem);
+      }
+      
+      _loggingService.logInfo('Added song to queue: ${song.title}');
+      
+      // No snackbar message - clean UX like Spotify
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error adding song to queue', e, stackTrace);
+      _showErrorSnackBar('Failed to add song to queue');
+    }
+  }
+
+  void _showAddToPlaylistDialog(Song song) {
+    HapticFeedback.selectionClick();
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => AddToPlaylistSheet(song: song),
+    );
   }
   
-  void _showAddToPlaylistDialog() {
-    _showSnackBar('Add to playlist feature coming soon', Colors.orange);
+  void _showSongInfoDialog(Song song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[600],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Song info with album art
+            _buildSongInfoHeader(song),
+            const SizedBox(height: 24),
+
+            // Song details
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow('Title', song.title),
+                    _buildInfoRow('Artist', song.artist),
+                    _buildInfoRow('Album', song.album),
+                    if (song.genre != null)
+                      _buildInfoRow('Genre', song.genre!),
+                    if (song.year != null)
+                      _buildInfoRow('Year', song.year.toString()),
+                    if (song.trackNumber != null)
+                      _buildInfoRow('Track', song.trackNumber.toString()),
+                    _buildInfoRow('Duration', song.formattedDuration),
+                    _buildInfoRow('File size', song.formattedFileSize),
+                    _buildInfoRow('Bitrate', '${song.bitrate} kbps'),
+                    _buildInfoRow('Date added', song.dateAdded.toString().split(' ')[0]),
+                    if (song.lastPlayed != null)
+                      _buildInfoRow('Last played', song.lastPlayed.toString().split(' ')[0]),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-  
-  void _shareSong() {
-    _showSnackBar('Share feature coming soon', Colors.orange);
+
+  Widget _buildSongInfoHeader(Song song) {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: song.albumArtPath != null
+              ? Image.file(
+            File(song.albumArtPath!),
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildDefaultAlbumArt(80);
+            },
+          )
+              : _buildDefaultAlbumArt(80),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Song Information',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                song.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                song.artist,
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (song.album.isNotEmpty)
+                Text(
+                  song.album,
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
-  
-  void _showSongInfo() {
-    _showSnackBar('Song info feature coming soon', Colors.orange);
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(Song song) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 8),
+            Text(
+              'Remove from library',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove "${song.title}" from your library?\n\nThis will remove it from all playlists but won\'t delete the actual file.',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              try {
+                await ref.read(songsProvider.notifier).deleteSong(song.id);
+
+                if (mounted) {
+                  navigator.pop();
+                  _showSuccessSnackBar('Song removed from library');
+                }
+              } catch (e, stackTrace) {
+                _loggingService.logError('Error deleting song', e, stackTrace);
+                if (mounted) {
+                  navigator.pop();
+                  _showErrorSnackBar('Failed to remove song');
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.black),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.black))),
+            ],
+          ),
+          backgroundColor: Colors.white,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.black),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.black))),
+            ],
+          ),
+          backgroundColor: Colors.white,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
   }
   
   void _showSnackBar(String message, Color color) {
