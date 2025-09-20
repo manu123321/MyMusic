@@ -234,20 +234,32 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       currentSongIndex = queue.indexWhere((item) => item.id == currentSong.id);
     }
 
+    // Only show current song and upcoming songs (Spotify-style)
+    List<MediaItem> displayQueue = [];
+    if (currentSongIndex >= 0 && currentSongIndex < queue.length) {
+      // Add current song and all upcoming songs
+      displayQueue = queue.sublist(currentSongIndex);
+    } else {
+      // Fallback: show all songs if current song not found
+      displayQueue = queue;
+    }
+
     return ReorderableListView.builder(
-      itemCount: queue.length,
+      itemCount: displayQueue.length,
       onReorder: _onReorder,
       proxyDecorator: _proxyDecorator,
       buildDefaultDragHandles: false,
       physics: const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
-        final song = queue[index];
-        final isCurrentSong = currentSongIndex == index;
+        final song = displayQueue[index];
+        final isCurrentSong = index == 0; // First item is always current song
+        final actualQueueIndex = currentSongIndex >= 0 ? currentSongIndex + index : index;
         
         return _buildQueueItem(
           key: ValueKey(song.id),
           song: song,
-          index: index,
+          index: actualQueueIndex, // Use actual queue index for operations
+          displayIndex: index, // Use display index for UI
           isCurrentSong: isCurrentSong,
           audioHandler: audioHandler,
           showReorderHandle: !isCurrentSong, // Only upcoming songs can be reordered
@@ -260,7 +272,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   Widget _buildQueueItem({
     required Key key,
     required MediaItem song,
-    required int index,
+    required int index, // Actual queue index for operations
+    required int displayIndex, // Display index for UI
     required bool isCurrentSong,
     required audioHandler,
     required bool showReorderHandle,
@@ -355,7 +368,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             // Three dash queue icon for reordering (only for upcoming songs)
             if (!isCurrentSong)
               ReorderableDragStartListener(
-                index: index, // Use the actual queue index
+                index: displayIndex, // Use the display index for ReorderableListView
                 child: GestureDetector(
                   onTap: () {
                     // Provide haptic feedback when drag handle is tapped
@@ -370,7 +383,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
               ),
           ],
         ),
-        onTap: isCurrentSong ? null : () => _jumpToSong(index, audioHandler),
+        onTap: isCurrentSong ? null : () => _jumpToSong(displayIndex, audioHandler),
       ),
     );
   }
@@ -448,8 +461,12 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         // Find current song index in the queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
         
-        // Prevent reordering the current song
-        if (oldIndex == currentIndex || newIndex == currentIndex) {
+        // Convert display indices to actual queue indices
+        final actualOldIndex = currentIndex >= 0 ? currentIndex + oldIndex : oldIndex;
+        final actualNewIndex = currentIndex >= 0 ? currentIndex + newIndex : newIndex;
+        
+        // Prevent reordering the current song (display index 0 = current song)
+        if (oldIndex == 0 || newIndex == 0) {
           _loggingService.logInfo('Cannot reorder current song');
           HapticFeedback.lightImpact();
           return;
@@ -457,13 +474,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         
         // Create new queue with reordered items
         final newQueue = List<MediaItem>.from(queue);
-        final item = newQueue.removeAt(oldIndex);
-        newQueue.insert(newIndex, item);
+        final item = newQueue.removeAt(actualOldIndex);
+        newQueue.insert(actualNewIndex, item);
         
         // Use the non-interrupting reorder method
         audioHandler.reorderQueue(newQueue);
         
-        _loggingService.logInfo('Reordered song from $oldIndex to $newIndex');
+        _loggingService.logInfo('Reordered song from display $oldIndex to $newIndex (actual $actualOldIndex to $actualNewIndex)');
         HapticFeedback.lightImpact();
       }
     } catch (e, stackTrace) {
@@ -480,15 +497,18 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         // Find the current song index in the queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
         
-        // Don't jump if it's the same song
-        if (index == currentIndex) {
+        // Convert display index to actual queue index
+        final actualIndex = currentIndex >= 0 ? currentIndex + index : index;
+        
+        // Don't jump if it's the same song (display index 0 = current song)
+        if (index == 0) {
           _loggingService.logInfo('Already playing current song');
           return;
         }
         
-        // Jump to the song at the specified index
-        audioHandler.skipToQueueItem(index);
-        _loggingService.logInfo('Jumping to song at index $index');
+        // Jump to the song at the actual queue index
+        audioHandler.skipToQueueItem(actualIndex);
+        _loggingService.logInfo('Jumping to song at display index $index (actual $actualIndex)');
         HapticFeedback.selectionClick();
       }
       
