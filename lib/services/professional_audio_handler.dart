@@ -831,11 +831,24 @@ class ProfessionalAudioHandler extends BaseAudioHandler
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     try {
       final songs = mediaItems.map(_mediaItemToSong).toList();
-      _queue.addAll(songs);
+      final sources = <AudioSource>[];
       
-      final sources = mediaItems.map((item) => 
-          AudioSource.uri(Uri.file(item.id))).toList();
-      await _playlist.addAll(sources);
+      // Filter out duplicates and add only new songs
+      for (final song in songs) {
+        final existingIndex = _queue.indexWhere((s) => s.id == song.id);
+        if (existingIndex == -1) {
+          // Song doesn't exist, add it
+          _queue.add(song);
+          sources.add(AudioSource.uri(Uri.file(song.filePath)));
+          _loggingService.logInfo('Added new song to queue: ${song.title}');
+        } else {
+          _loggingService.logInfo('Skipped duplicate song: ${song.title}');
+        }
+      }
+      
+      if (sources.isNotEmpty) {
+        await _playlist.addAll(sources);
+      }
       
       final queueMediaItems = _queue.map(_songToMediaItem).toList();
       _queueSubject.add(queueMediaItems);
@@ -856,14 +869,35 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       final song = _mediaItemToSong(mediaItem);
       final source = AudioSource.uri(Uri.file(mediaItem.id));
       
-      // Insert at the specified index
-      _queue.insert(index, song);
-      await _playlist.insert(index, source);
+      // Check if this song already exists in the queue (avoid duplicates)
+      final existingIndex = _queue.indexWhere((s) => s.id == song.id);
+      if (existingIndex != -1 && existingIndex != index) {
+        // Song already exists at a different position - remove the existing one first
+        _loggingService.logInfo('Removing duplicate song "${song.title}" from index $existingIndex before adding at index $index');
+        
+        // Adjust insertion index if we're removing a song before the insertion point
+        final adjustedIndex = existingIndex < index ? index - 1 : index;
+        
+        // Remove existing duplicate
+        _queue.removeAt(existingIndex);
+        await _playlist.removeAt(existingIndex);
+        
+        // Insert at adjusted position
+        _queue.insert(adjustedIndex, song);
+        await _playlist.insert(adjustedIndex, source);
+        
+        _loggingService.logInfo('Moved song "${song.title}" from index $existingIndex to $adjustedIndex (avoiding duplicate)');
+      } else {
+        // No duplicate found, insert normally
+        _queue.insert(index, song);
+        await _playlist.insert(index, source);
+        
+        _loggingService.logInfo('Added song to queue at index $index: ${song.title}');
+      }
       
       final queueMediaItems = _queue.map(_songToMediaItem).toList();
       _queueSubject.add(queueMediaItems);
       
-      _loggingService.logInfo('Added song to queue at index $index: ${song.title}');
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to add song to queue at index $index', e, stackTrace);
       rethrow;
