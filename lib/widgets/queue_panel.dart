@@ -395,7 +395,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                 },
               ),
             
-            // Professional drag handle for reordering (only for upcoming songs)
+            // Three dash queue icon for reordering (only for upcoming songs)
             if (!isCurrentSong)
               ReorderableDragStartListener(
                 index: originalIndex ?? index - 1, // Use original index for correct drag behavior
@@ -404,22 +404,10 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                     // Provide haptic feedback when drag handle is tapped
                     HapticFeedback.selectionClick();
                   },
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[800],
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.grey[600]!,
-                        width: 0.5,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.drag_handle,
-                      color: Colors.white,
-                      size: 18,
-                    ),
+                  child: const Icon(
+                    Icons.queue_music,
+                    color: Colors.white,
+                    size: 23,
                   ),
                 ),
               ),
@@ -480,16 +468,8 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             shadowColor: Colors.black.withOpacity(0.4),
             borderRadius: BorderRadius.circular(12),
             color: Colors.grey[900]?.withOpacity(opacity),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.grey[700]!.withOpacity(opacity),
-                  width: 1,
-                ),
-              ),
-              child: child,
-            ),
+            // Removed border decoration for cleaner drag appearance
+            child: child,
           ),
         );
       },
