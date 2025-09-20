@@ -217,27 +217,27 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                 Center(
                                   child: CompositeAlbumArt(
                                     songs: _songs,
-                                    size: 160,
+                                    size: 224,
                                     borderRadius: 12,
                                   ),
                                 ),
                                 
                                 const SizedBox(height: 40),
                                 
-                                // Playlist description (if exists)
-                                if (widget.playlist.description?.isNotEmpty == true)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 16),
-                                    child: Text(
-                                      widget.playlist.description!,
-                                      style: TextStyle(
-                                        color: Colors.grey[400],
-                                        fontSize: 16,
-                                      ),
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
+                                // // Playlist description (if exists)
+                                // if (widget.playlist.description?.isNotEmpty == true)
+                                //   Padding(
+                                //     padding: const EdgeInsets.only(bottom: 16),
+                                //     child: Text(
+                                //       widget.playlist.description!,
+                                //       style: TextStyle(
+                                //         color: Colors.grey[400],
+                                //         fontSize: 16,
+                                //       ),
+                                //       maxLines: 3,
+                                //       overflow: TextOverflow.ellipsis,
+                                //     ),
+                                //   ),
                                 
                                 // Playlist title and action buttons - Same row
                                 Row(
@@ -313,8 +313,6 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                     ),
                                   ],
                                 ),
-                                
-                                const SizedBox(height: 10),
                               ],
                             ),
                           ),
@@ -333,7 +331,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
               transform: Matrix4.translationValues(0, _isSearchFocused ? -20 : 0, 0),
-              margin: EdgeInsets.only(top: _isSearchFocused ? 0 : 16),
+              margin: EdgeInsets.zero,
                 child: _isLoading
                 ? const Center(
                     child: Padding(
@@ -425,26 +423,21 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
   }
 
   Widget _buildSongsList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Songs list
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _filteredSongs.length,
-          itemBuilder: (context, index) {
-            final song = _filteredSongs[index];
-            // Find the original index in the full songs list for proper playback
-            final originalIndex = _songs.indexWhere((s) => s.id == song.id);
-            return SongListTile(
-              song: song,
-              onTap: () => _playSong(song, originalIndex >= 0 ? originalIndex : index),
-              onMorePressed: () => _showRemoveFromPlaylistDialog(song),
-            );
-          },
-        ),
-      ],
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: _filteredSongs.length,
+      itemBuilder: (context, index) {
+        final song = _filteredSongs[index];
+        // Find the original index in the full songs list for proper playback
+        final originalIndex = _songs.indexWhere((s) => s.id == song.id);
+        return SongListTile(
+          song: song,
+          onTap: () => _playSong(song, originalIndex >= 0 ? originalIndex : index),
+          onMorePressed: () => _showRemoveFromPlaylistDialog(song),
+        );
+      },
     );
   }
 
