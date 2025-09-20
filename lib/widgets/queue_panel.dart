@@ -90,7 +90,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
               'Queue',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 letterSpacing: -0.5,
               ),
@@ -228,82 +228,39 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       return _buildEmptyState();
     }
 
-    // Separate current song from upcoming songs (Spotify-style)
-    final currentSongList = <MediaItem>[];
-    final upcomingSongs = <MediaItem>[];
-    
+    // Find current song index in the actual queue
+    int currentSongIndex = -1;
     if (currentSong != null) {
-      // Add current song first
-      currentSongList.add(currentSong);
-      
-      // Add all other songs as upcoming
-      for (final song in queue) {
-        if (song.id != currentSong.id) {
-          upcomingSongs.add(song);
-        }
-      }
-    } else {
-      // No current song, show all as upcoming
-      upcomingSongs.addAll(queue);
+      currentSongIndex = queue.indexWhere((item) => item.id == currentSong.id);
     }
 
-    return Column(
-      children: [
-        // Current song section (non-reorderable)
-        if (currentSongList.isNotEmpty)
-          _buildCurrentSongSection(currentSongList.first, audioHandler),
-        
-        // Upcoming songs section (reorderable)
-        if (upcomingSongs.isNotEmpty)
-          Expanded(
-            child: _buildUpcomingSongsSection(upcomingSongs, audioHandler),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildCurrentSongSection(MediaItem currentSong, audioHandler) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: _buildQueueItem(
-        key: ValueKey('current_${currentSong.id}'),
-        song: currentSong,
-        index: 0,
-        isCurrentSong: true,
-        audioHandler: audioHandler,
-        showReorderHandle: false,
-      ),
-    );
-  }
-
-  Widget _buildUpcomingSongsSection(List<MediaItem> upcomingSongs, audioHandler) {
     return ReorderableListView.builder(
-      itemCount: upcomingSongs.length,
-      onReorder: _onReorderUpcoming,
+      itemCount: queue.length,
+      onReorder: _onReorder,
       proxyDecorator: _proxyDecorator,
       buildDefaultDragHandles: false,
       physics: const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
-        final song = upcomingSongs[index];
+        final song = queue[index];
+        final isCurrentSong = currentSongIndex == index;
         
         return _buildQueueItem(
-          key: ValueKey('upcoming_${song.id}'),
+          key: ValueKey(song.id),
           song: song,
-          index: index + 1, // Offset by 1 since current song is at index 0
-          originalIndex: index, // Pass the original index for drag handling
-          isCurrentSong: false,
+          index: index,
+          isCurrentSong: isCurrentSong,
           audioHandler: audioHandler,
-          showReorderHandle: true,
+          showReorderHandle: !isCurrentSong, // Only upcoming songs can be reordered
         );
       },
     );
   }
 
+
   Widget _buildQueueItem({
     required Key key,
     required MediaItem song,
     required int index,
-    int? originalIndex, // Original index for drag handling
     required bool isCurrentSong,
     required audioHandler,
     required bool showReorderHandle,
@@ -398,7 +355,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             // Three dash queue icon for reordering (only for upcoming songs)
             if (!isCurrentSong)
               ReorderableDragStartListener(
-                index: originalIndex ?? index - 1, // Use original index for correct drag behavior
+                index: index, // Use the actual queue index
                 child: GestureDetector(
                   onTap: () {
                     // Provide haptic feedback when drag handle is tapped
@@ -477,7 +434,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     );
   }
 
-  void _onReorderUpcoming(int oldIndex, int newIndex) {
+  void _onReorder(int oldIndex, int newIndex) {
     try {
       if (oldIndex < newIndex) {
         newIndex -= 1;
@@ -488,36 +445,29 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       final currentSong = ref.read(currentSongProvider).value;
       
       if (queue.isNotEmpty && currentSong != null) {
-        // Find current song index in the original queue
+        // Find current song index in the queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
-        if (currentIndex != -1) {
-          // Create a list of upcoming songs (excluding current song)
-          final upcomingSongs = <MediaItem>[];
-          for (int i = 0; i < queue.length; i++) {
-            if (i != currentIndex) {
-              upcomingSongs.add(queue[i]);
-            }
-          }
-          
-          // Reorder the upcoming songs
-          final reorderedUpcoming = List<MediaItem>.from(upcomingSongs);
-          final item = reorderedUpcoming.removeAt(oldIndex);
-          reorderedUpcoming.insert(newIndex, item);
-          
-          // Rebuild the complete queue with current song first, then reordered upcoming songs
-          final newQueue = <MediaItem>[];
-          newQueue.add(currentSong); // Current song stays first
-          newQueue.addAll(reorderedUpcoming); // Add reordered upcoming songs
-          
-          // Use the new non-interrupting reorder method
-          audioHandler.reorderQueue(newQueue);
-          
-          _loggingService.logInfo('Reordered upcoming song from $oldIndex to $newIndex');
+        
+        // Prevent reordering the current song
+        if (oldIndex == currentIndex || newIndex == currentIndex) {
+          _loggingService.logInfo('Cannot reorder current song');
           HapticFeedback.lightImpact();
+          return;
         }
+        
+        // Create new queue with reordered items
+        final newQueue = List<MediaItem>.from(queue);
+        final item = newQueue.removeAt(oldIndex);
+        newQueue.insert(newIndex, item);
+        
+        // Use the non-interrupting reorder method
+        audioHandler.reorderQueue(newQueue);
+        
+        _loggingService.logInfo('Reordered song from $oldIndex to $newIndex');
+        HapticFeedback.lightImpact();
       }
     } catch (e, stackTrace) {
-      _loggingService.logError('Error reordering upcoming songs', e, stackTrace);
+      _loggingService.logError('Error reordering queue', e, stackTrace);
     }
   }
 
@@ -527,36 +477,19 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       final currentSong = ref.read(currentSongProvider).value;
       
       if (queue.isNotEmpty && currentSong != null) {
-        // Find the current song index in the original queue
+        // Find the current song index in the queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
-        if (currentIndex != -1) {
-          // Calculate the actual index in the original queue
-          // Index 0 is current song, so we don't need to jump
-          if (index == 0) {
-            _loggingService.logInfo('Already playing current song');
-            return;
-          }
-          
-          // For upcoming songs, find the actual index in the original queue
-          int? actualIndex;
-          int upcomingSongIndex = 0;
-          
-          for (int i = 0; i < queue.length; i++) {
-            if (i != currentIndex) {
-              if (upcomingSongIndex == index - 1) {
-                actualIndex = i;
-                break;
-              }
-              upcomingSongIndex++;
-            }
-          }
-          
-          if (actualIndex != null) {
-            audioHandler.skipToQueueItem(actualIndex);
-          }
-          _loggingService.logInfo('Jumping to song at actual index $actualIndex');
-          HapticFeedback.selectionClick();
+        
+        // Don't jump if it's the same song
+        if (index == currentIndex) {
+          _loggingService.logInfo('Already playing current song');
+          return;
         }
+        
+        // Jump to the song at the specified index
+        audioHandler.skipToQueueItem(index);
+        _loggingService.logInfo('Jumping to song at index $index');
+        HapticFeedback.selectionClick();
       }
       
       // No snackbar message - clean UX like Spotify
