@@ -21,6 +21,7 @@ abstract class CustomAudioHandler {
   // Queue management
   Future<void> addQueueItems(List<MediaItem> items);
   Future<void> addQueueItem(MediaItem mediaItem);
+  Future<void> addQueueItemAt(MediaItem mediaItem, int index);
   Future<void> removeQueueItem(MediaItem mediaItem);
   Future<void> clearQueue();
   Future<void> setQueue(List<MediaItem> items);

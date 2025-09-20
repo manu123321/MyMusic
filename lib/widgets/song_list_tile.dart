@@ -752,6 +752,8 @@ class _SongListTileState extends ConsumerState<SongListTile>
       HapticFeedback.lightImpact();
       
       final audioHandler = ref.read(audioHandlerProvider);
+      final queue = ref.read(queueProvider).value ?? [];
+      final currentSong = ref.read(currentSongProvider).value;
       
       // Convert song to MediaItem
       final mediaItem = MediaItem(
@@ -770,8 +772,20 @@ class _SongListTileState extends ConsumerState<SongListTile>
         },
       );
       
-      // Add to queue
-      audioHandler.addQueueItem(mediaItem);
+      // Add to queue next to current playing song
+      if (currentSong != null && queue.isNotEmpty) {
+        final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+        if (currentIndex != -1) {
+          // Add after current song (next position)
+          audioHandler.addQueueItemAt(mediaItem, currentIndex + 1);
+        } else {
+          // Fallback to end of queue
+          audioHandler.addQueueItem(mediaItem);
+        }
+      } else {
+        // No current song or empty queue, add to end
+        audioHandler.addQueueItem(mediaItem);
+      }
       
       _loggingService.logInfo('Added song to queue: ${widget.song.title}');
       

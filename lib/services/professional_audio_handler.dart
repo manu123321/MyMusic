@@ -851,6 +851,26 @@ class ProfessionalAudioHandler extends BaseAudioHandler
   Future<void> addQueueItem(MediaItem mediaItem) => addQueueItems([mediaItem]);
 
   @override
+  Future<void> addQueueItemAt(MediaItem mediaItem, int index) async {
+    try {
+      final song = _mediaItemToSong(mediaItem);
+      final source = AudioSource.uri(Uri.file(mediaItem.id));
+      
+      // Insert at the specified index
+      _queue.insert(index, song);
+      await _playlist.insert(index, source);
+      
+      final queueMediaItems = _queue.map(_songToMediaItem).toList();
+      _queueSubject.add(queueMediaItems);
+      
+      _loggingService.logInfo('Added song to queue at index $index: ${song.title}');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to add song to queue at index $index', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> removeQueueItem(MediaItem mediaItem) async {
     try {
       final index = _queue.indexWhere((s) => s.filePath == mediaItem.id);

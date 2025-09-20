@@ -19,8 +19,6 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   final LoggingService _loggingService = LoggingService();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  
-  bool _isReordering = false;
 
   @override
   void initState() {
@@ -131,50 +129,20 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             
             const SizedBox(width: 8),
             
-            // Clear queue button
+            // Sleep timer button
             Container(
               decoration: BoxDecoration(
-                color: queueLength > 0 ? Colors.grey[800] : Colors.grey[900],
+                color: Colors.grey[800],
                 borderRadius: BorderRadius.circular(20),
               ),
               child: IconButton(
-                onPressed: queueLength > 0 ? _showClearQueueDialog : null,
+                onPressed: _showSleepTimerDialog,
                 icon: Icon(
-                  Icons.clear_all,
-                  color: queueLength > 0 ? Colors.white : Colors.grey[600],
+                  Icons.bedtime,
+                  color: Colors.white,
                   size: 18,
                 ),
-                tooltip: 'Clear queue',
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 8),
-            
-            // Reorder mode toggle
-            Container(
-              decoration: BoxDecoration(
-                color: _isReordering 
-                    ? const Color(0xFF00E676).withOpacity(0.2)
-                    : (queueLength > 1 ? Colors.grey[800] : Colors.grey[900]),
-                borderRadius: BorderRadius.circular(20),
-                border: _isReordering 
-                    ? Border.all(color: const Color(0xFF00E676), width: 1)
-                    : null,
-              ),
-              child: IconButton(
-                onPressed: queueLength > 1 ? _toggleReorderMode : null,
-                icon: Icon(
-                  _isReordering ? Icons.done : Icons.reorder,
-                  color: _isReordering 
-                      ? const Color(0xFF00E676) 
-                      : (queueLength > 1 ? Colors.white : Colors.grey[600]),
-                  size: 18,
-                ),
-                tooltip: _isReordering ? 'Done reordering' : 'Reorder queue',
+                tooltip: 'Sleep timer',
                 constraints: const BoxConstraints(
                   minWidth: 40,
                   minHeight: 40,
@@ -228,42 +196,46 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   }
 
   Widget _buildQueueList(List<MediaItem> queue, MediaItem? currentSong, audioHandler) {
-    if (_isReordering) {
-      return ReorderableListView.builder(
-        itemCount: queue.length,
-        onReorder: _onReorder,
-        itemBuilder: (context, index) {
-          final song = queue[index];
-          final isCurrentSong = currentSong?.id == song.id;
-          
-          return _buildQueueItem(
-            key: ValueKey(song.id),
-            song: song,
-            index: index,
-            isCurrentSong: isCurrentSong,
-            audioHandler: audioHandler,
-            showReorderHandle: true,
-          );
-        },
-      );
+    // Reorder queue to show current song first
+    final orderedQueue = <MediaItem>[];
+    if (currentSong != null && queue.isNotEmpty) {
+      // Find current song index
+      final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+      if (currentIndex != -1) {
+        // Add current song first
+        orderedQueue.add(queue[currentIndex]);
+        // Add remaining songs after current song
+        for (int i = currentIndex + 1; i < queue.length; i++) {
+          orderedQueue.add(queue[i]);
+        }
+        // Add songs before current song
+        for (int i = 0; i < currentIndex; i++) {
+          orderedQueue.add(queue[i]);
+        }
+      } else {
+        orderedQueue.addAll(queue);
+      }
     } else {
-      return ListView.builder(
-        itemCount: queue.length,
-        itemBuilder: (context, index) {
-          final song = queue[index];
-          final isCurrentSong = currentSong?.id == song.id;
-          
-          return _buildQueueItem(
-            key: ValueKey(song.id),
-            song: song,
-            index: index,
-            isCurrentSong: isCurrentSong,
-            audioHandler: audioHandler,
-            showReorderHandle: false,
-          );
-        },
-      );
+      orderedQueue.addAll(queue);
     }
+
+    return ReorderableListView.builder(
+      itemCount: orderedQueue.length,
+      onReorder: _onReorder,
+      itemBuilder: (context, index) {
+        final song = orderedQueue[index];
+        final isCurrentSong = currentSong?.id == song.id;
+        
+        return _buildQueueItem(
+          key: ValueKey(song.id),
+          song: song,
+          index: index,
+          isCurrentSong: isCurrentSong,
+          audioHandler: audioHandler,
+          showReorderHandle: true,
+        );
+      },
+    );
   }
 
   Widget _buildQueueItem({
@@ -348,48 +320,22 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             
             const SizedBox(width: 8),
             
-            // Remove button
-            if (!showReorderHandle)
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    _removeFromQueue(song, audioHandler);
-                  },
-                  icon: Icon(
-                    Icons.close,
-                    color: Colors.grey[300],
-                    size: 18,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  tooltip: 'Remove from queue',
-                ),
+            // Reorder handle (always visible for direct reordering)
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[800],
+                borderRadius: BorderRadius.circular(20),
               ),
-            
-            // Reorder handle
-            if (showReorderHandle)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Icon(
-                  Icons.drag_handle,
-                  color: Colors.grey[300],
-                  size: 18,
-                ),
+              child: Icon(
+                Icons.drag_handle,
+                color: Colors.grey[300],
+                size: 18,
               ),
+            ),
           ],
         ),
-        onTap: !_isReordering ? () => _jumpToSong(index, audioHandler) : null,
+        onTap: () => _jumpToSong(index, audioHandler),
       ),
     );
   }
@@ -418,13 +364,48 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     );
   }
 
-  void _toggleReorderMode() {
-    setState(() {
-      _isReordering = !_isReordering;
-    });
-    HapticFeedback.selectionClick();
-    
-    _loggingService.logInfo('Queue reorder mode: $_isReordering');
+  void _showSleepTimerDialog() {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.bedtime, color: Color(0xFF00E676)),
+            SizedBox(width: 8),
+            Text(
+              'Sleep Timer',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Set a timer to stop playback after a certain amount of time.',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement sleep timer functionality
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E676),
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Set Timer'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -433,10 +414,45 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         newIndex -= 1;
       }
       
-      // TODO: Implement queue reordering in audio handler
-      _loggingService.logInfo('Reordered queue item from $oldIndex to $newIndex');
+      final audioHandler = ref.read(audioHandlerProvider);
+      final queue = ref.read(queueProvider).value ?? [];
+      final currentSong = ref.read(currentSongProvider).value;
       
-      HapticFeedback.lightImpact();
+      if (queue.isNotEmpty && currentSong != null) {
+        // Find the actual indices in the original queue
+        final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+        if (currentIndex != -1) {
+          // Calculate the actual indices in the original queue
+          int actualOldIndex, actualNewIndex;
+          
+          if (oldIndex == 0) {
+            actualOldIndex = currentIndex;
+          } else if (oldIndex <= queue.length - currentIndex - 1) {
+            actualOldIndex = currentIndex + oldIndex;
+          } else {
+            actualOldIndex = oldIndex - (queue.length - currentIndex - 1) - 1;
+          }
+          
+          if (newIndex == 0) {
+            actualNewIndex = currentIndex;
+          } else if (newIndex <= queue.length - currentIndex - 1) {
+            actualNewIndex = currentIndex + newIndex;
+          } else {
+            actualNewIndex = newIndex - (queue.length - currentIndex - 1) - 1;
+          }
+          
+          // Reorder the queue
+          final newQueue = List<MediaItem>.from(queue);
+          final item = newQueue.removeAt(actualOldIndex);
+          newQueue.insert(actualNewIndex, item);
+          
+          // Update the queue in audio handler
+          audioHandler.setQueue(newQueue);
+          
+          _loggingService.logInfo('Reordered queue item from $actualOldIndex to $actualNewIndex');
+          HapticFeedback.lightImpact();
+        }
+      }
     } catch (e, stackTrace) {
       _loggingService.logError('Error reordering queue', e, stackTrace);
     }
@@ -444,9 +460,29 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
 
   void _jumpToSong(int index, audioHandler) {
     try {
-      audioHandler.skipToQueueItem(index);
-      _loggingService.logInfo('Jumping to song at index $index');
-      HapticFeedback.selectionClick();
+      final queue = ref.read(queueProvider).value ?? [];
+      final currentSong = ref.read(currentSongProvider).value;
+      
+      if (queue.isNotEmpty && currentSong != null) {
+        // Find the current song index
+        final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
+        if (currentIndex != -1) {
+          // Calculate the actual index in the original queue
+          int actualIndex;
+          
+          if (index == 0) {
+            actualIndex = currentIndex;
+          } else if (index <= queue.length - currentIndex - 1) {
+            actualIndex = currentIndex + index;
+          } else {
+            actualIndex = index - (queue.length - currentIndex - 1) - 1;
+          }
+          
+          audioHandler.skipToQueueItem(actualIndex);
+          _loggingService.logInfo('Jumping to song at actual index $actualIndex');
+          HapticFeedback.selectionClick();
+        }
+      }
       
       // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
@@ -466,28 +502,6 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     }
   }
 
-  void _removeFromQueue(MediaItem song, audioHandler) {
-    try {
-      audioHandler.removeQueueItem(song);
-      _loggingService.logInfo('Removed song from queue: ${song.title}');
-      
-      // No snackbar message - clean UX like Spotify
-    } catch (e, stackTrace) {
-      _loggingService.logError('Error removing song from queue', e, stackTrace);
-      
-      // Only show error snackbar for failures
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to remove "${song.title}" from queue', style: const TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-    }
-  }
 
   void _shuffleQueue() {
     try {
@@ -514,77 +528,4 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     }
   }
 
-  void _showClearQueueDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange),
-            SizedBox(width: 8),
-            Text(
-              'Clear Queue',
-              style: TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Are you sure you want to clear the entire queue? This will stop playback.',
-          style: TextStyle(color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearQueue();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Clear Queue'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _clearQueue() {
-    try {
-      final audioHandler = ref.read(audioHandlerProvider);
-      audioHandler.clearQueue();
-      
-      _loggingService.logInfo('Queue cleared by user');
-      
-      // No snackbar message - clean UX like Spotify
-    } catch (e, stackTrace) {
-      _loggingService.logError('Error clearing queue', e, stackTrace);
-      
-      // Only show error snackbar for failures
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.black),
-              SizedBox(width: 8),
-              Text('Failed to clear queue', style: TextStyle(color: Colors.black)),
-            ],
-          ),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-    }
-  }
 }
