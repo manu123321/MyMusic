@@ -256,7 +256,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         final actualQueueIndex = currentSongIndex >= 0 ? currentSongIndex + index : index;
         
         return _buildQueueItem(
-          key: ValueKey(song.id),
+          key: ValueKey('${song.id}_${actualQueueIndex}'), // Create unique key using song ID and position
           song: song,
           index: actualQueueIndex, // Use actual queue index for operations
           displayIndex: index, // Use display index for UI
