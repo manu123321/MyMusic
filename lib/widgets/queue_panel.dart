@@ -87,18 +87,21 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Up Next',
+              'Queue',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
-              '$queueLength song${queueLength == 1 ? '' : 's'}',
+              '$queueLength song${queueLength == 1 ? '' : 's'} in queue',
               style: TextStyle(
                 color: Colors.grey[400],
                 fontSize: 14,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -106,38 +109,77 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         Row(
           children: [
             // Shuffle queue button
-            IconButton(
-              onPressed: queueLength > 1 ? _shuffleQueue : null,
-              icon: Icon(
-                Icons.shuffle,
-                color: queueLength > 1 ? Colors.white : Colors.grey[600],
-                size: 20,
+            Container(
+              decoration: BoxDecoration(
+                color: queueLength > 1 ? Colors.grey[800] : Colors.grey[900],
+                borderRadius: BorderRadius.circular(20),
               ),
-              tooltip: 'Shuffle queue',
+              child: IconButton(
+                onPressed: queueLength > 1 ? _shuffleQueue : null,
+                icon: Icon(
+                  Icons.shuffle,
+                  color: queueLength > 1 ? Colors.white : Colors.grey[600],
+                  size: 18,
+                ),
+                tooltip: 'Shuffle queue',
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
             ),
+            
+            const SizedBox(width: 8),
             
             // Clear queue button
-            IconButton(
-              onPressed: queueLength > 0 ? _showClearQueueDialog : null,
-              icon: Icon(
-                Icons.clear_all,
-                color: queueLength > 0 ? Colors.white : Colors.grey[600],
-                size: 20,
+            Container(
+              decoration: BoxDecoration(
+                color: queueLength > 0 ? Colors.grey[800] : Colors.grey[900],
+                borderRadius: BorderRadius.circular(20),
               ),
-              tooltip: 'Clear queue',
+              child: IconButton(
+                onPressed: queueLength > 0 ? _showClearQueueDialog : null,
+                icon: Icon(
+                  Icons.clear_all,
+                  color: queueLength > 0 ? Colors.white : Colors.grey[600],
+                  size: 18,
+                ),
+                tooltip: 'Clear queue',
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
             ),
             
+            const SizedBox(width: 8),
+            
             // Reorder mode toggle
-            IconButton(
-              onPressed: queueLength > 1 ? _toggleReorderMode : null,
-              icon: Icon(
-                _isReordering ? Icons.done : Icons.reorder,
+            Container(
+              decoration: BoxDecoration(
                 color: _isReordering 
-                    ? const Color(0xFF00E676) 
-                    : (queueLength > 1 ? Colors.white : Colors.grey[600]),
-                size: 20,
+                    ? const Color(0xFF00E676).withOpacity(0.2)
+                    : (queueLength > 1 ? Colors.grey[800] : Colors.grey[900]),
+                borderRadius: BorderRadius.circular(20),
+                border: _isReordering 
+                    ? Border.all(color: const Color(0xFF00E676), width: 1)
+                    : null,
               ),
-              tooltip: _isReordering ? 'Done reordering' : 'Reorder queue',
+              child: IconButton(
+                onPressed: queueLength > 1 ? _toggleReorderMode : null,
+                icon: Icon(
+                  _isReordering ? Icons.done : Icons.reorder,
+                  color: _isReordering 
+                      ? const Color(0xFF00E676) 
+                      : (queueLength > 1 ? Colors.white : Colors.grey[600]),
+                  size: 18,
+                ),
+                tooltip: _isReordering ? 'Done reordering' : 'Reorder queue',
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
             ),
           ],
         ),
@@ -150,26 +192,34 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.queue_music_outlined,
-            size: 64,
-            color: Colors.grey[600],
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey[800]?.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Icon(
+              Icons.queue_music_outlined,
+              size: 48,
+              color: Colors.grey[500],
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Text(
-            'Queue is empty',
+            'Your queue is empty',
             style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
+              color: Colors.grey[300],
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Add songs to start playing',
+            'Add songs to start building your queue',
             style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
+              color: Colors.grey[500],
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -226,67 +276,40 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   }) {
     return Container(
       key: key,
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
         color: isCurrentSong 
-            ? const Color(0xFF00E676).withOpacity(0.1)
-            : Colors.grey[800]?.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
+            ? const Color(0xFF00E676).withOpacity(0.15)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
         border: isCurrentSong
-            ? Border.all(color: const Color(0xFF00E676), width: 1)
+            ? Border.all(color: const Color(0xFF00E676).withOpacity(0.3), width: 1)
             : null,
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Queue position
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: isCurrentSong ? const Color(0xFF00E676) : Colors.grey[700],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Center(
-                child: Text(
-                  '${index + 1}',
-                  style: TextStyle(
-                    color: isCurrentSong ? Colors.black : Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            
-            // Album art
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: song.artUri != null
-                  ? Image.file(
-                      File(song.artUri!.toFilePath()),
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      cacheWidth: 40,
-                      cacheHeight: 40,
-                      errorBuilder: (context, error, stackTrace) {
-                        return _buildDefaultAlbumArt();
-                      },
-                    )
-                  : _buildDefaultAlbumArt(),
-            ),
-          ],
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: song.artUri != null
+              ? Image.file(
+                  File(song.artUri!.toFilePath()),
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  cacheWidth: 48,
+                  cacheHeight: 48,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildDefaultAlbumArt();
+                  },
+                )
+              : _buildDefaultAlbumArt(),
         ),
         title: Text(
           song.title,
           style: TextStyle(
             color: isCurrentSong ? const Color(0xFF00E676) : Colors.white,
-            fontSize: 14,
-            fontWeight: isCurrentSong ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 15,
+            fontWeight: isCurrentSong ? FontWeight.w600 : FontWeight.w500,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -294,8 +317,9 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         subtitle: Text(
           song.artist ?? 'Unknown Artist',
           style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 12,
+            color: isCurrentSong ? Colors.grey[300] : Colors.grey[400],
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -306,17 +330,18 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             // Playing indicator
             if (isCurrentSong)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00E676),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'PLAYING',
+                  'NOW PLAYING',
                   style: TextStyle(
                     color: Colors.black,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
@@ -325,29 +350,42 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             
             // Remove button
             if (!showReorderHandle)
-              IconButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  _removeFromQueue(song, audioHandler);
-                },
-                icon: Icon(
-                  Icons.close,
-                  color: Colors.grey[400],
-                  size: 16,
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
+                child: IconButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _removeFromQueue(song, audioHandler);
+                  },
+                  icon: Icon(
+                    Icons.close,
+                    color: Colors.grey[300],
+                    size: 18,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  tooltip: 'Remove from queue',
                 ),
-                tooltip: 'Remove from queue',
               ),
             
             // Reorder handle
             if (showReorderHandle)
-              Icon(
-                Icons.drag_handle,
-                color: Colors.grey[400],
-                size: 20,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.drag_handle,
+                  color: Colors.grey[300],
+                  size: 18,
+                ),
               ),
           ],
         ),
@@ -358,11 +396,11 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
 
   Widget _buildDefaultAlbumArt() {
     return Container(
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: Colors.grey[700],
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -375,7 +413,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       child: const Icon(
         Icons.music_note_rounded,
         color: Colors.white,
-        size: 16,
+        size: 20,
       ),
     );
   }
@@ -410,20 +448,11 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       _loggingService.logInfo('Jumping to song at index $index');
       HapticFeedback.selectionClick();
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Jumped to selected song', style: TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1500),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
+      // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
       _loggingService.logError('Error jumping to song', e, stackTrace);
       
+      // Only show error snackbar for failures
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to jump to song', style: TextStyle(color: Colors.black)),
@@ -442,9 +471,14 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       audioHandler.removeQueueItem(song);
       _loggingService.logInfo('Removed song from queue: ${song.title}');
       
+      // No snackbar message - clean UX like Spotify
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error removing song from queue', e, stackTrace);
+      
+      // Only show error snackbar for failures
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Removed "${song.title}" from queue', style: const TextStyle(color: Colors.black)),
+          content: Text('Failed to remove "${song.title}" from queue', style: const TextStyle(color: Colors.black)),
           backgroundColor: Colors.white,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -452,8 +486,6 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
           ),
         ),
       );
-    } catch (e, stackTrace) {
-      _loggingService.logError('Error removing song from queue', e, stackTrace);
     }
   }
 
@@ -464,26 +496,11 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       _loggingService.logInfo('Shuffling queue');
       HapticFeedback.mediumImpact();
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.shuffle, color: Colors.black, size: 18),
-              SizedBox(width: 8),
-              Text('Queue shuffled', style: TextStyle(color: Colors.black)),
-            ],
-          ),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 2000),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
+      // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
       _loggingService.logError('Error shuffling queue', e, stackTrace);
       
+      // Only show error snackbar for failures
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to shuffle queue', style: TextStyle(color: Colors.black)),
@@ -547,25 +564,11 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       
       _loggingService.logInfo('Queue cleared by user');
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.black),
-              SizedBox(width: 8),
-              Text('Queue cleared', style: TextStyle(color: Colors.black)),
-            ],
-          ),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
+      // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
       _loggingService.logError('Error clearing queue', e, stackTrace);
       
+      // Only show error snackbar for failures
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(

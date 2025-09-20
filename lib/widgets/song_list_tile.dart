@@ -775,7 +775,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
       
       _loggingService.logInfo('Added song to queue: ${widget.song.title}');
       
-      _showSuccessSnackBar('♪ Added "${widget.song.title}" to queue');
+      // No snackbar message - clean UX like Spotify
     } catch (e, stackTrace) {
       _loggingService.logError('Error adding song to queue', e, stackTrace);
       _showErrorSnackBar('Failed to add song to queue');
