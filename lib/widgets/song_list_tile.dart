@@ -52,7 +52,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
 
     return Semantics(
       label: 'Song: ${widget.song.title} by ${widget.song.artist}',
-      hint: 'Tap to play, or tap more options for additional actions',
+      hint: 'Tap to play, long press or tap more options for additional actions',
       child: Container(
         decoration: BoxDecoration(
           color: widget.isSelected
@@ -69,6 +69,7 @@ class _SongListTileState extends ConsumerState<SongListTile>
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: _isLoading ? null : (widget.onTap ?? _playSong),
+            onLongPress: _isLoading ? null : (widget.onMorePressed ?? _showSongOptions),
             splashColor: const Color(0xFF00E676).withOpacity(0.2),
             highlightColor: const Color(0xFF00E676).withOpacity(0.1),
             child: Padding(
@@ -334,14 +335,6 @@ class _SongListTileState extends ConsumerState<SongListTile>
             const SizedBox(height: 24),
 
             // Options
-            _buildOptionTile(
-              icon: Icons.play_arrow,
-              title: 'Play',
-              onTap: () {
-                Navigator.pop(context);
-                _playSong();
-              },
-            ),
             _buildOptionTile(
               icon: widget.song.isFavorite ? Icons.favorite : Icons.favorite_border,
               title: widget.song.isFavorite ? 'Remove from favorites' : 'Add to favorites',
