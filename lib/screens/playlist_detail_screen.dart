@@ -128,7 +128,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
         slivers: [
           // App bar with playlist info
           SliverAppBar(
-            expandedHeight: _isSearchFocused ? 30 : 300,
+            expandedHeight: _isSearchFocused ? 30 : 450,
             pinned: true,
             backgroundColor: Colors.black,
             leading: IconButton(
@@ -193,176 +193,133 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                       scale: _headerHeightAnimation.value,
                       alignment: Alignment.topCenter,
                       child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.grey[900]!,
-                            Colors.black,
-                          ],
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.grey[900]!,
+                              Colors.black,
+                            ],
+                          ),
                         ),
-                      ),
-                      child: SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              // Calculate available height and adjust layout accordingly
-                              final availableHeight = constraints.maxHeight;
-                              final isVeryCompact = availableHeight < 200;
-                              final isCompact = availableHeight < 250;
-                              
-                              return SingleChildScrollView(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: constraints.maxHeight,
-                                  ),
-                                  child: IntrinsicHeight(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Add top spacing to push content away from search bar/back button
-                                        SizedBox(height: isVeryCompact ? 40 : (isCompact ? 60 : 80)),
-                                        
-                                        // Playlist icon with composite album art
-                                        CompositeAlbumArt(
-                                          songs: _songs,
-                                          size: isVeryCompact ? 60 : (isCompact ? 80 : 120),
-                                          borderRadius: 12,
-                                        ),
-                                        
-                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 16)),
-                                        
-                                        // Playlist title and info
-                                        if (!isVeryCompact) ...[
-                                          Text(
-                                            widget.playlist.name,
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: isCompact ? 20 : 28,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          
-                                          if (widget.playlist.description?.isNotEmpty == true)
-                                            Padding(
-                                              padding: const EdgeInsets.only(top: 4),
-                                              child: Text(
-                                                widget.playlist.description!,
-                                                style: TextStyle(
-                                                  color: Colors.grey[400],
-                                                  fontSize: isCompact ? 12 : 14,
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 8),
-                                            child: Text(
-                                              '${_songs.length} ${_songs.length == 1 ? 'song' : 'songs'}',
-                                              style: TextStyle(
-                                                color: Colors.grey[500],
-                                                fontSize: isCompact ? 12 : 13,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-
-                                        SizedBox(height: isVeryCompact ? 8 : (isCompact ? 12 : 16)),
-                                        
-                                        // Play buttons
-                                        Row(
-                                          children: [
-                                            // Shuffle button (now first)
-                                            Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: _songs.isNotEmpty ? _playShuffledFromStart : null,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.grey[800],
-                                                  foregroundColor: Colors.white,
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                                    vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                ),
-                                                icon: Icon(Icons.shuffle, size: isVeryCompact ? 14 : (isCompact ? 16 : 20)),
-                                                label: Text(
-                                                  'Shuffle',
-                                                  style: TextStyle(
-                                                    fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            
-                                            SizedBox(width: isVeryCompact ? 8 : 12),
-                                            
-                                            // Play button (now second)
-                                            Expanded(
-                                              child: StreamBuilder<PlaybackState>(
-                                                stream: ref.read(audioHandlerProvider).playbackState,
-                                                builder: (context, snapshot) {
-                                                  final playbackState = snapshot.data;
-                                                  final isGloballyPlaying = playbackState?.playing ?? false;
-                                                  
-                                                  // Check if current playing music is from this playlist
-                                                  final isPlayingThisPlaylist = _isCurrentlyPlayingThisPlaylist();
-                                                  final shouldShowPause = isGloballyPlaying && isPlayingThisPlaylist;
-                                                  
-                                                  return ElevatedButton.icon(
-                                                    onPressed: _songs.isNotEmpty ? () => _togglePlayback(shouldShowPause) : null,
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: Colors.green,
-                                                      foregroundColor: Colors.white,
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: isVeryCompact ? 12 : (isCompact ? 16 : 24),
-                                                        vertical: isVeryCompact ? 6 : (isCompact ? 8 : 12),
-                                                      ),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(20),
-                                                      ),
-                                                    ),
-                                                    icon: Icon(
-                                                      shouldShowPause ? Icons.pause : Icons.play_arrow, 
-                                                      size: isVeryCompact ? 14 : (isCompact ? 16 : 20)
-                                                    ),
-                                                    label: Text(
-                                                      shouldShowPause ? 'Pause' : 'Play',
-                                                      style: TextStyle(
-                                                        fontSize: isVeryCompact ? 12 : (isCompact ? 14 : 16),
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        
-                                        // Add bottom spacing for visual balance
-                                        SizedBox(height: isVeryCompact ? 20 : (isCompact ? 30 : 40)),
-                                      ],
-                                    ),
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Spacer to push content down from search bar
+                                const SizedBox(height: 20),
+                                
+                                // Playlist artwork
+                                Center(
+                                  child: CompositeAlbumArt(
+                                    songs: _songs,
+                                    size: 160,
+                                    borderRadius: 12,
                                   ),
                                 ),
-                              );
-                            },
+                                
+                                const SizedBox(height: 40),
+                                
+                                // Playlist description (if exists)
+                                if (widget.playlist.description?.isNotEmpty == true)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Text(
+                                      widget.playlist.description!,
+                                      style: TextStyle(
+                                        color: Colors.grey[400],
+                                        fontSize: 16,
+                                      ),
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                
+                                // Playlist title and action buttons - Same row
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Playlist title on the left
+                                    Expanded(
+                                      child: Text(
+                                        widget.playlist.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    
+                                    // Action buttons on the right
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Shuffle button with state-based coloring
+                                        StreamBuilder<PlaybackState>(
+                                          stream: ref.read(audioHandlerProvider).playbackState,
+                                          builder: (context, snapshot) {
+                                            final playbackState = snapshot.data;
+                                            final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
+                                            
+                                            return IconButton(
+                                              onPressed: _songs.isNotEmpty ? _playShuffledFromStart : null,
+                                              icon: Icon(
+                                                Icons.shuffle,
+                                                color: isShuffleEnabled ? const Color(0xFF66ff00) : Colors.white,
+                                                size: 28,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        
+                                        const SizedBox(width: 8),
+                                        
+                                        // Play/pause button with new color
+                                        Container(
+                                          width: 50,
+                                          height: 50,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF66ff00),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: StreamBuilder<PlaybackState>(
+                                            stream: ref.read(audioHandlerProvider).playbackState,
+                                            builder: (context, snapshot) {
+                                              final playbackState = snapshot.data;
+                                              final isGloballyPlaying = playbackState?.playing ?? false;
+                                              final isPlayingThisPlaylist = _isCurrentlyPlayingThisPlaylist();
+                                              final shouldShowPause = isGloballyPlaying && isPlayingThisPlaylist;
+                                              
+                                              return IconButton(
+                                                onPressed: _songs.isNotEmpty ? () => _togglePlayback(shouldShowPause) : null,
+                                                icon: Icon(
+                                                  shouldShowPause ? Icons.pause : Icons.play_arrow,
+                                                  color: Colors.black,
+                                                  size: 24,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                
+                                const SizedBox(height: 10),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     ),
                   );
                 },
