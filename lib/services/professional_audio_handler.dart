@@ -888,6 +888,12 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       // Convert MediaItems to Songs
       final newSongs = newOrder.map(_mediaItemToSong).toList();
       
+      // Check if current song position changed
+      int? newCurrentIndex;
+      if (currentSongId != null) {
+        newCurrentIndex = newSongs.indexWhere((song) => song.id == currentSongId);
+      }
+      
       // Update internal queue
       _queue.clear();
       _queue.addAll(newSongs);
@@ -896,20 +902,17 @@ class ProfessionalAudioHandler extends BaseAudioHandler
       final queueMediaItems = _queue.map(_songToMediaItem).toList();
       _queueSubject.add(queueMediaItems);
       
-      // Rebuild playlist
-      await _playlist.clear();
-      final sources = newSongs.map((song) => 
-          AudioSource.uri(Uri.file(song.filePath))).toList();
-      await _playlist.addAll(sources);
-      
-      // Find where the current song is now in the new order
-      int? newCurrentIndex;
-      if (currentSongId != null) {
-        newCurrentIndex = newSongs.indexWhere((song) => song.id == currentSongId);
-      }
-      
-      if (newCurrentIndex != null && newCurrentIndex != -1) {
-        // Current song found in new order, restore its exact position
+      // Only rebuild playlist if current song position changed
+      if (newCurrentIndex != null && newCurrentIndex != currentIndex) {
+        _loggingService.logInfo('Current song moved from index $currentIndex to $newCurrentIndex - rebuilding playlist');
+        
+        // Current song moved, need to rebuild playlist
+        await _playlist.clear();
+        final sources = newSongs.map((song) => 
+            AudioSource.uri(Uri.file(song.filePath))).toList();
+        await _playlist.addAll(sources);
+        
+        // Restore exact position for the moved current song
         await _player.seek(currentPosition, index: newCurrentIndex);
         
         // Only call play() if it was playing before and we're not already playing
@@ -917,16 +920,14 @@ class ProfessionalAudioHandler extends BaseAudioHandler
           await _player.play();
         }
       } else {
-        // Current song not found in new order, start from beginning of first song
-        await _player.seek(Duration.zero, index: 0);
-        if (isPlaying) {
-          await _player.play();
-        }
+        _loggingService.logInfo('Current song position unchanged - skipping playlist rebuild to avoid glitch');
+        // Current song didn't move, no need to rebuild playlist
+        // This prevents the audio glitch
       }
       
       await _saveQueue();
       
-      _loggingService.logInfo('Queue reordered successfully - current song preserved');
+      _loggingService.logInfo('Queue reordered successfully without audio interruption');
     } catch (e, stackTrace) {
       _loggingService.logError('Error reordering queue', e, stackTrace);
       rethrow;
