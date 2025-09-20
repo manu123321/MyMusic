@@ -108,35 +108,39 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         ),
         Row(
           children: [
-            // Shuffle queue button
-            Container(
-              decoration: BoxDecoration(
-                color: queueLength > 1 ? Colors.grey[800] : Colors.grey[900],
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Consumer(
-                builder: (context, ref, child) {
-                  final playbackState = ref.watch(playbackStateProvider).value;
-                  final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
-                  
-                  return IconButton(
-                    onPressed: queueLength > 1 ? _toggleShuffle : null,
-                    icon: Icon(
-                      Icons.shuffle,
-                      color: queueLength > 1 
-                          ? (isShuffleEnabled ? Colors.green : Colors.grey[400])
-                          : Colors.grey[600],
-                      size: 18,
-                    ),
-                    tooltip: isShuffleEnabled ? 'Disable shuffle' : 'Enable shuffle',
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                  );
-                },
-              ),
-            ),
+             // Shuffle queue button
+             Container(
+               decoration: BoxDecoration(
+                 color: queueLength > 1 ? Colors.grey[800] : Colors.grey[900],
+                 borderRadius: BorderRadius.circular(20),
+               ),
+               child: Consumer(
+                 builder: (context, ref, child) {
+                   final playbackState = ref.watch(playbackStateProvider).value;
+                   final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
+                   
+                   return Container(
+                     decoration: BoxDecoration(
+                       color: isShuffleEnabled && queueLength > 1 ? Colors.green : Colors.grey[800],
+                       borderRadius: BorderRadius.circular(20),
+                     ),
+                     child: IconButton(
+                       onPressed: queueLength > 1 ? _toggleShuffle : null,
+                       icon: Icon(
+                         Icons.shuffle,
+                         color: Colors.white,
+                         size: 18,
+                       ),
+                       tooltip: isShuffleEnabled ? 'Disable shuffle' : 'Enable shuffle',
+                       constraints: const BoxConstraints(
+                         minWidth: 40,
+                         minHeight: 40,
+                       ),
+                     ),
+                   );
+                 },
+               ),
+             ),
             
             const SizedBox(width: 8),
             
@@ -466,13 +470,13 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
             actualNewIndex = newIndex - (queue.length - currentIndex - 1) - 1;
           }
           
-          // Reorder the queue
-          final newQueue = List<MediaItem>.from(queue);
-          final item = newQueue.removeAt(actualOldIndex);
-          newQueue.insert(actualNewIndex, item);
-          
-          // Update the queue in audio handler
-          audioHandler.setQueue(newQueue);
+           // Reorder the queue
+           final newQueue = List<MediaItem>.from(queue);
+           final item = newQueue.removeAt(actualOldIndex);
+           newQueue.insert(actualNewIndex, item);
+           
+           // Update the queue in audio handler without affecting playback
+           audioHandler.setQueue(newQueue);
           
           _loggingService.logInfo('Reordered queue item from $actualOldIndex to $actualNewIndex');
           HapticFeedback.lightImpact();
