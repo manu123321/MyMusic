@@ -871,6 +871,61 @@ class ProfessionalAudioHandler extends BaseAudioHandler
   }
 
   @override
+  Future<void> reorderQueue(List<MediaItem> newOrder) async {
+    try {
+      _loggingService.logInfo('Reordering upcoming songs without interrupting current playback');
+      
+      // Store current playback state
+      final currentPosition = _player.position;
+      final isPlaying = _player.playing;
+      final currentIndex = _player.currentIndex;
+      
+      // Convert MediaItems to Songs
+      final newSongs = newOrder.map(_mediaItemToSong).toList();
+      
+      // Update internal queue
+      _queue.clear();
+      _queue.addAll(newSongs);
+      
+      // Update queue state
+      final queueMediaItems = _queue.map(_songToMediaItem).toList();
+      _queueSubject.add(queueMediaItems);
+      
+      // Since we only reorder upcoming songs (current song stays at index 0),
+      // we need to rebuild the playlist to reflect the new order of upcoming songs
+      await _playlist.clear();
+      final sources = newSongs.map((song) => 
+          AudioSource.uri(Uri.file(song.filePath))).toList();
+      await _playlist.addAll(sources);
+      
+      // Restore playback to current song at index 0 with exact position
+      if (currentIndex != null && currentIndex == 0) {
+        // Current song is at index 0, restore exact position
+        await _player.seek(currentPosition, index: 0);
+        if (isPlaying) {
+          // Small delay to ensure seek completes before playing
+          await Future.delayed(const Duration(milliseconds: 100));
+          await _player.play();
+        }
+      } else {
+        // Fallback: seek to beginning of current song
+        await _player.seek(Duration.zero, index: 0);
+        if (isPlaying) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          await _player.play();
+        }
+      }
+      
+      await _saveQueue();
+      
+      _loggingService.logInfo('Queue reordered successfully - current song preserved at index 0');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Error reordering queue', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> removeQueueItem(MediaItem mediaItem) async {
     try {
       final index = _queue.indexWhere((s) => s.filePath == mediaItem.id);

@@ -224,43 +224,74 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
   }
 
   Widget _buildQueueList(List<MediaItem> queue, MediaItem? currentSong, audioHandler) {
-    // Reorder queue to show current song first
-    final orderedQueue = <MediaItem>[];
-    if (currentSong != null && queue.isNotEmpty) {
-      // Find current song index
-      final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
-      if (currentIndex != -1) {
-        // Add current song first
-        orderedQueue.add(queue[currentIndex]);
-        // Add remaining songs after current song
-        for (int i = currentIndex + 1; i < queue.length; i++) {
-          orderedQueue.add(queue[i]);
-        }
-        // Add songs before current song
-        for (int i = 0; i < currentIndex; i++) {
-          orderedQueue.add(queue[i]);
-        }
-      } else {
-        orderedQueue.addAll(queue);
-      }
-    } else {
-      orderedQueue.addAll(queue);
+    if (queue.isEmpty) {
+      return _buildEmptyState();
     }
 
+    // Separate current song from upcoming songs (Spotify-style)
+    final currentSongList = <MediaItem>[];
+    final upcomingSongs = <MediaItem>[];
+    
+    if (currentSong != null) {
+      // Add current song first
+      currentSongList.add(currentSong);
+      
+      // Add all other songs as upcoming
+      for (final song in queue) {
+        if (song.id != currentSong.id) {
+          upcomingSongs.add(song);
+        }
+      }
+    } else {
+      // No current song, show all as upcoming
+      upcomingSongs.addAll(queue);
+    }
+
+    return Column(
+      children: [
+        // Current song section (non-reorderable)
+        if (currentSongList.isNotEmpty)
+          _buildCurrentSongSection(currentSongList.first, audioHandler),
+        
+        // Upcoming songs section (reorderable)
+        if (upcomingSongs.isNotEmpty)
+          Expanded(
+            child: _buildUpcomingSongsSection(upcomingSongs, audioHandler),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCurrentSongSection(MediaItem currentSong, audioHandler) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: _buildQueueItem(
+        key: ValueKey('current_${currentSong.id}'),
+        song: currentSong,
+        index: 0,
+        isCurrentSong: true,
+        audioHandler: audioHandler,
+        showReorderHandle: false,
+      ),
+    );
+  }
+
+  Widget _buildUpcomingSongsSection(List<MediaItem> upcomingSongs, audioHandler) {
     return ReorderableListView.builder(
-      itemCount: orderedQueue.length,
-      onReorder: _onReorder,
+      itemCount: upcomingSongs.length,
+      onReorder: _onReorderUpcoming,
       proxyDecorator: _proxyDecorator,
       buildDefaultDragHandles: false,
+      physics: const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
-        final song = orderedQueue[index];
-        final isCurrentSong = currentSong?.id == song.id;
+        final song = upcomingSongs[index];
         
         return _buildQueueItem(
-          key: ValueKey(song.id),
+          key: ValueKey('upcoming_${song.id}'),
           song: song,
-          index: index,
-          isCurrentSong: isCurrentSong,
+          index: index + 1, // Offset by 1 since current song is at index 0
+          originalIndex: index, // Pass the original index for drag handling
+          isCurrentSong: false,
           audioHandler: audioHandler,
           showReorderHandle: true,
         );
@@ -272,6 +303,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     required Key key,
     required MediaItem song,
     required int index,
+    int? originalIndex, // Original index for drag handling
     required bool isCurrentSong,
     required audioHandler,
     required bool showReorderHandle,
@@ -363,14 +395,32 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                 },
               ),
             
-            // Three dash queue icon for reordering (only for non-current songs)
+            // Professional drag handle for reordering (only for upcoming songs)
             if (!isCurrentSong)
               ReorderableDragStartListener(
-                index: index,
-                child: Icon(
-                  Icons.queue_music,
-                  color: Colors.white,
-                  size: 23, // Increased by 15% from 20
+                index: originalIndex ?? index - 1, // Use original index for correct drag behavior
+                child: GestureDetector(
+                  onTap: () {
+                    // Provide haptic feedback when drag handle is tapped
+                    HapticFeedback.selectionClick();
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[800],
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.grey[600]!,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.drag_handle,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -419,17 +469,27 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       animation: animation,
       builder: (context, child) {
         final double animValue = Curves.easeInOut.transform(animation.value);
-        final double elevation = lerpDouble(0, 6, animValue)!;
-        final double scale = lerpDouble(1, 1.02, animValue)!;
+        final double elevation = lerpDouble(2, 8, animValue)!;
+        final double scale = lerpDouble(1, 1.05, animValue)!;
+        final double opacity = lerpDouble(0.8, 1.0, animValue)!;
         
         return Transform.scale(
           scale: scale,
           child: Material(
             elevation: elevation,
-            color: Colors.transparent,
-            shadowColor: Colors.black.withOpacity(0.3),
+            shadowColor: Colors.black.withOpacity(0.4),
             borderRadius: BorderRadius.circular(12),
-            child: child,
+            color: Colors.grey[900]?.withOpacity(opacity),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.grey[700]!.withOpacity(opacity),
+                  width: 1,
+                ),
+              ),
+              child: child,
+            ),
           ),
         );
       },
@@ -437,7 +497,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     );
   }
 
-  void _onReorder(int oldIndex, int newIndex) {
+  void _onReorderUpcoming(int oldIndex, int newIndex) {
     try {
       if (oldIndex < newIndex) {
         newIndex -= 1;
@@ -448,42 +508,36 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       final currentSong = ref.read(currentSongProvider).value;
       
       if (queue.isNotEmpty && currentSong != null) {
-        // Find the actual indices in the original queue
+        // Find current song index in the original queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
         if (currentIndex != -1) {
-          // Calculate the actual indices in the original queue
-          int actualOldIndex, actualNewIndex;
-          
-          if (oldIndex == 0) {
-            actualOldIndex = currentIndex;
-          } else if (oldIndex <= queue.length - currentIndex - 1) {
-            actualOldIndex = currentIndex + oldIndex;
-          } else {
-            actualOldIndex = oldIndex - (queue.length - currentIndex - 1) - 1;
+          // Create a list of upcoming songs (excluding current song)
+          final upcomingSongs = <MediaItem>[];
+          for (int i = 0; i < queue.length; i++) {
+            if (i != currentIndex) {
+              upcomingSongs.add(queue[i]);
+            }
           }
           
-          if (newIndex == 0) {
-            actualNewIndex = currentIndex;
-          } else if (newIndex <= queue.length - currentIndex - 1) {
-            actualNewIndex = currentIndex + newIndex;
-          } else {
-            actualNewIndex = newIndex - (queue.length - currentIndex - 1) - 1;
-          }
+          // Reorder the upcoming songs
+          final reorderedUpcoming = List<MediaItem>.from(upcomingSongs);
+          final item = reorderedUpcoming.removeAt(oldIndex);
+          reorderedUpcoming.insert(newIndex, item);
           
-           // Reorder the queue
-           final newQueue = List<MediaItem>.from(queue);
-           final item = newQueue.removeAt(actualOldIndex);
-           newQueue.insert(actualNewIndex, item);
-           
-           // Update the queue in audio handler without affecting playback
-           audioHandler.setQueue(newQueue);
+          // Rebuild the complete queue with current song first, then reordered upcoming songs
+          final newQueue = <MediaItem>[];
+          newQueue.add(currentSong); // Current song stays first
+          newQueue.addAll(reorderedUpcoming); // Add reordered upcoming songs
           
-          _loggingService.logInfo('Reordered queue item from $actualOldIndex to $actualNewIndex');
+          // Use the new non-interrupting reorder method
+          audioHandler.reorderQueue(newQueue);
+          
+          _loggingService.logInfo('Reordered upcoming song from $oldIndex to $newIndex');
           HapticFeedback.lightImpact();
         }
       }
     } catch (e, stackTrace) {
-      _loggingService.logError('Error reordering queue', e, stackTrace);
+      _loggingService.logError('Error reordering upcoming songs', e, stackTrace);
     }
   }
 
@@ -493,21 +547,33 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
       final currentSong = ref.read(currentSongProvider).value;
       
       if (queue.isNotEmpty && currentSong != null) {
-        // Find the current song index
+        // Find the current song index in the original queue
         final currentIndex = queue.indexWhere((item) => item.id == currentSong.id);
         if (currentIndex != -1) {
           // Calculate the actual index in the original queue
-          int actualIndex;
-          
+          // Index 0 is current song, so we don't need to jump
           if (index == 0) {
-            actualIndex = currentIndex;
-          } else if (index <= queue.length - currentIndex - 1) {
-            actualIndex = currentIndex + index;
-          } else {
-            actualIndex = index - (queue.length - currentIndex - 1) - 1;
+            _loggingService.logInfo('Already playing current song');
+            return;
           }
           
-          audioHandler.skipToQueueItem(actualIndex);
+          // For upcoming songs, find the actual index in the original queue
+          int? actualIndex;
+          int upcomingSongIndex = 0;
+          
+          for (int i = 0; i < queue.length; i++) {
+            if (i != currentIndex) {
+              if (upcomingSongIndex == index - 1) {
+                actualIndex = i;
+                break;
+              }
+              upcomingSongIndex++;
+            }
+          }
+          
+          if (actualIndex != null) {
+            audioHandler.skipToQueueItem(actualIndex);
+          }
           _loggingService.logInfo('Jumping to song at actual index $actualIndex');
           HapticFeedback.selectionClick();
         }
