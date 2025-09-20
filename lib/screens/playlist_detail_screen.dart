@@ -263,17 +263,20 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         // Shuffle button with state-based coloring
-                                        StreamBuilder<PlaybackState>(
-                                          stream: ref.read(audioHandlerProvider).playbackState,
-                                          builder: (context, snapshot) {
-                                            final playbackState = snapshot.data;
-                                            final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
+                                        Consumer(
+                                          builder: (context, ref, child) {
+                                            final audioHandler = ref.read(audioHandlerProvider);
+                                            final playbackState = ref.watch(playbackStateProvider).value;
+                                            final currentShuffle = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
                                             
                                             return IconButton(
-                                              onPressed: _songs.isNotEmpty ? _playShuffledFromStart : null,
+                                              onPressed: _songs.isNotEmpty ? () {
+                                                // Toggle shuffle using the same logic as Now Playing screen
+                                                audioHandler.setShuffleModeEnabled(!currentShuffle);
+                                              } : null,
                                               icon: Icon(
                                                 Icons.shuffle,
-                                                color: isShuffleEnabled ? const Color(0xFF66ff00) : Colors.white,
+                                                color: currentShuffle ? Colors.green : Colors.white,
                                                 size: 28,
                                               ),
                                             );
