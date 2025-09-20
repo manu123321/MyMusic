@@ -109,28 +109,22 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
         Row(
           children: [
             // Shuffle queue button
-            Consumer(
-              builder: (context, ref, child) {
-                final playbackState = ref.watch(playbackStateProvider);
-                final isShuffleEnabled = playbackState.when(
-                  data: (state) => state.shuffleMode == AudioServiceRepeatMode.all,
-                  loading: () => false,
-                  error: (_, __) => false,
-                );
-                
-                return Container(
-                  decoration: BoxDecoration(
-                    color: queueLength > 1 
-                        ? (isShuffleEnabled ? Colors.green : Colors.grey[800])
-                        : Colors.grey[900],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
+            Container(
+              decoration: BoxDecoration(
+                color: queueLength > 1 ? Colors.grey[800] : Colors.grey[900],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final playbackState = ref.watch(playbackStateProvider).value;
+                  final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
+                  
+                  return IconButton(
                     onPressed: queueLength > 1 ? _toggleShuffle : null,
                     icon: Icon(
                       Icons.shuffle,
                       color: queueLength > 1 
-                          ? (isShuffleEnabled ? Colors.white : Colors.grey[400])
+                          ? (isShuffleEnabled ? Colors.green : Colors.grey[400])
                           : Colors.grey[600],
                       size: 18,
                     ),
@@ -139,9 +133,9 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                       minWidth: 40,
                       minHeight: 40,
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
             
             const SizedBox(width: 8),
@@ -328,47 +322,42 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
           children: [
             // Play/Pause button for current song
             if (isCurrentSong)
-              Padding(
-                padding: const EdgeInsets.only(right: 2.5), // Reduced by 50% from 5
-                child: Consumer(
-                  builder: (context, ref, child) {
-                    final playbackState = ref.watch(playbackStateProvider);
-                    final isPlaying = playbackState.when(
-                      data: (state) => state.playing,
-                      loading: () => false,
-                      error: (_, __) => false,
-                    );
-                    
-                    return Container(
-                      width: 34, // Reduced by 15% from 40
-                      height: 34, // Reduced by 15% from 40
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+              Consumer(
+                builder: (context, ref, child) {
+                  final playbackState = ref.watch(playbackStateProvider);
+                  final isPlaying = playbackState.when(
+                    data: (state) => state.playing,
+                    loading: () => false,
+                    error: (_, __) => false,
+                  );
+                  
+                  return Container(
+                    width: 34, // Reduced by 15% from 40
+                    height: 34, // Reduced by 15% from 40
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        if (isPlaying) {
+                          audioHandler.pause();
+                        } else {
+                          audioHandler.play();
+                        }
+                      },
+                      icon: Icon(
+                        isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.black,
+                        size: 17, // Reduced proportionally
                       ),
-                      child: IconButton(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          if (isPlaying) {
-                            audioHandler.pause();
-                          } else {
-                            audioHandler.play();
-                          }
-                        },
-                        icon: Icon(
-                          isPlaying ? Icons.pause : Icons.play_arrow,
-                          color: Colors.black,
-                          size: 17, // Reduced proportionally
-                        ),
-                        padding: EdgeInsets.zero,
-                        tooltip: isPlaying ? 'Pause' : 'Play',
-                      ),
-                    );
-                  },
-                ),
+                      padding: EdgeInsets.zero,
+                      tooltip: isPlaying ? 'Pause' : 'Play',
+                    ),
+                  );
+                },
               ),
-            
-            const SizedBox(width: 8),
             
             // Three dash queue icon for reordering (only for non-current songs)
             if (!isCurrentSong)
@@ -543,7 +532,7 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
     try {
       final audioHandler = ref.read(audioHandlerProvider);
       final playbackState = ref.read(playbackStateProvider).value;
-      final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceRepeatMode.all;
+      final isShuffleEnabled = playbackState?.shuffleMode == AudioServiceShuffleMode.all;
       
       // Toggle shuffle mode
       audioHandler.setShuffleModeEnabled(!isShuffleEnabled);
