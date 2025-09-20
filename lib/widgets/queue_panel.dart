@@ -365,19 +365,20 @@ class _QueuePanelState extends ConsumerState<QueuePanel>
                 },
               ),
             
-            // Three dash queue icon for reordering (only for upcoming songs)
+            // Professional drag handle (only for upcoming songs)
             if (!isCurrentSong)
               ReorderableDragStartListener(
-                index: displayIndex, // Use the display index for ReorderableListView
-                child: GestureDetector(
-                  onTap: () {
-                    // Provide haptic feedback when drag handle is tapped
-                    HapticFeedback.selectionClick();
-                  },
+                index: displayIndex,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   child: const Icon(
-                    Icons.queue_music,
+                    Icons.drag_handle,
                     color: Colors.white,
-                    size: 23,
+                    size: 20,
                   ),
                 ),
               ),
