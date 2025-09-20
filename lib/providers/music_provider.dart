@@ -1056,6 +1056,100 @@ final totalPlaytimeProvider = Provider<Duration>((ref) {
   return Duration(milliseconds: totalMilliseconds);
 });
 
+// === FAVORITES MANAGEMENT ===
+
+// Centralized favorites management
+final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>((ref) {
+  return FavoritesNotifier(
+    ref.read(storageServiceProvider),
+    ref.read(loggingServiceProvider),
+    ref,
+  );
+});
+
+class FavoritesNotifier extends StateNotifier<Set<String>> {
+  final StorageService _storageService;
+  final LoggingService _loggingService;
+  final Ref _ref;
+  
+  FavoritesNotifier(
+    this._storageService,
+    this._loggingService,
+    this._ref,
+  ) : super({}) {
+    _initializeFavorites();
+  }
+
+  Future<void> _initializeFavorites() async {
+    try {
+      // Load all songs and get their favorite status
+      final allSongs = _storageService.getAllSongs();
+      final favoriteIds = allSongs
+          .where((song) => song.isFavorite)
+          .map((song) => song.id)
+          .toSet();
+      
+      state = favoriteIds;
+      
+      // Ensure liked songs playlist is in sync
+      await _syncLikedSongsPlaylist();
+      
+      _loggingService.logInfo('Favorites initialized with ${favoriteIds.length} songs');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to initialize favorites', e, stackTrace);
+    }
+  }
+
+  Future<void> toggleFavorite(String songId) async {
+    try {
+      final isCurrentlyFavorite = state.contains(songId);
+      final newFavoriteStatus = !isCurrentlyFavorite;
+      
+      // Update the song's isFavorite field
+      final songsNotifier = _ref.read(songsProvider.notifier);
+      final song = songsNotifier.getSongById(songId);
+      if (song != null) {
+        final updatedSong = song.copyWith(isFavorite: newFavoriteStatus);
+        await songsNotifier.updateSong(updatedSong);
+      }
+      
+      // Update local state
+      if (newFavoriteStatus) {
+        state = {...state, songId};
+        await _storageService.addToLikedSongs(songId);
+      } else {
+        state = {...state}..remove(songId);
+        await _storageService.removeFromLikedSongs(songId);
+      }
+      
+      // Refresh liked songs playlist
+      await _syncLikedSongsPlaylist();
+      
+      _loggingService.logInfo('Toggled favorite for song: $songId (now: $newFavoriteStatus)');
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to toggle favorite: $songId', e, stackTrace);
+    }
+  }
+
+  Future<void> _syncLikedSongsPlaylist() async {
+    try {
+      // Update the liked songs playlist with current favorites
+      await _storageService.updateLikedSongs();
+      
+      // Refresh playlists to trigger UI updates
+      _ref.read(playlistsProvider.notifier).refreshPlaylists();
+    } catch (e, stackTrace) {
+      _loggingService.logError('Failed to sync liked songs playlist', e, stackTrace);
+    }
+  }
+
+  bool isFavorite(String songId) {
+    return state.contains(songId);
+  }
+
+  List<String> get favoriteSongIds => state.toList();
+}
+
 // === UTILITY PROVIDERS ===
 
 // App initialization status

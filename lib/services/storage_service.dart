@@ -493,22 +493,36 @@ class StorageService {
   // Liked songs management
   Future<void> addToLikedSongs(String songId) async {
     try {
-      final likedSongs = getPlaylist('liked_songs');
-      if (likedSongs != null) {
-        final updatedSongIds = List<String>.from(likedSongs.songIds);
+      await _ensureInitialized();
+      
+      // Get or create the liked songs playlist
+      Playlist? likedSongs = getPlaylist('liked_songs');
+      if (likedSongs == null) {
+        // Create the liked songs playlist if it doesn't exist
+        likedSongs = Playlist.system(
+          name: 'Liked Songs',
+          description: 'Your liked songs',
+          colorTheme: '#FF0040', // Red color for heart
+        );
+        await savePlaylist(likedSongs);
+        _playlistCache['liked_songs'] = likedSongs;
+        _loggingService.logDebug('Created liked songs playlist');
+      }
+      
+      final updatedSongIds = List<String>.from(likedSongs.songIds);
+      
+      // Add if not already present
+      if (!updatedSongIds.contains(songId)) {
+        updatedSongIds.add(songId);
         
-        // Add if not already present
-        if (!updatedSongIds.contains(songId)) {
-          updatedSongIds.add(songId);
-          
-          final updatedPlaylist = likedSongs.copyWith(
-            songIds: updatedSongIds,
-            dateModified: DateTime.now(),
-          );
-          
-          await savePlaylist(updatedPlaylist);
-          _loggingService.logDebug('Added song to liked songs: $songId');
-        }
+        final updatedPlaylist = likedSongs.copyWith(
+          songIds: updatedSongIds,
+          dateModified: DateTime.now(),
+        );
+        
+        await savePlaylist(updatedPlaylist);
+        _playlistCache['liked_songs'] = updatedPlaylist;
+        _loggingService.logDebug('Added song to liked songs: $songId');
       }
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to add to liked songs: $songId', e, stackTrace);
@@ -517,6 +531,8 @@ class StorageService {
 
   Future<void> removeFromLikedSongs(String songId) async {
     try {
+      await _ensureInitialized();
+      
       final likedSongs = getPlaylist('liked_songs');
       if (likedSongs != null) {
         final updatedSongIds = List<String>.from(likedSongs.songIds);
@@ -529,6 +545,7 @@ class StorageService {
           );
           
           await savePlaylist(updatedPlaylist);
+          _playlistCache['liked_songs'] = updatedPlaylist;
           _loggingService.logDebug('Removed song from liked songs: $songId');
         }
       }
@@ -539,23 +556,37 @@ class StorageService {
 
   Future<void> updateLikedSongs() async {
     try {
-      final likedSongs = getPlaylist('liked_songs');
-      if (likedSongs != null) {
-        // Get all favorite songs
-        final allSongs = getAllSongs();
-        final favoriteSongIds = allSongs
-            .where((song) => song.isFavorite)
-            .map((song) => song.id)
-            .toList();
-        
-        final updatedPlaylist = likedSongs.copyWith(
-          songIds: favoriteSongIds,
-          dateModified: DateTime.now(),
+      await _ensureInitialized();
+      
+      // Get or create the liked songs playlist
+      Playlist? likedSongs = getPlaylist('liked_songs');
+      if (likedSongs == null) {
+        // Create the liked songs playlist if it doesn't exist
+        likedSongs = Playlist.system(
+          name: 'Liked Songs',
+          description: 'Your liked songs',
+          colorTheme: '#FF0040', // Red color for heart
         );
-        
-        await savePlaylist(updatedPlaylist);
-        _loggingService.logDebug('Updated liked songs playlist with ${favoriteSongIds.length} songs');
+        await savePlaylist(likedSongs);
+        _playlistCache['liked_songs'] = likedSongs;
+        _loggingService.logDebug('Created liked songs playlist during update');
       }
+      
+      // Get all favorite songs
+      final allSongs = getAllSongs();
+      final favoriteSongIds = allSongs
+          .where((song) => song.isFavorite)
+          .map((song) => song.id)
+          .toList();
+      
+      final updatedPlaylist = likedSongs.copyWith(
+        songIds: favoriteSongIds,
+        dateModified: DateTime.now(),
+      );
+      
+      await savePlaylist(updatedPlaylist);
+      _playlistCache['liked_songs'] = updatedPlaylist;
+      _loggingService.logDebug('Updated liked songs playlist with ${favoriteSongIds.length} songs');
     } catch (e, stackTrace) {
       _loggingService.logError('Failed to update liked songs', e, stackTrace);
     }

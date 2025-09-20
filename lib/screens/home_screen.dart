@@ -566,13 +566,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildPlaylistCardsSection() {
     final playlists = ref.watch(playlistsProvider);
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
-    final likedSongsPlaylist = playlists.firstWhere(
-      (p) => p.name == 'Liked Songs' && p.isSystemPlaylist,
-      orElse: () => Playlist.system(name: 'Liked Songs'),
-    );
+    final favorites = ref.watch(favoritesProvider);
     
-    // Show liked songs only if it has songs
-    final shouldShowLikedSongs = likedSongsPlaylist.songIds.isNotEmpty;
+    // Show liked songs only if there are favorite songs
+    final shouldShowLikedSongs = favorites.isNotEmpty;
     
     // Don't show anything if there are no playlists or if searching
     if ((userPlaylists.isEmpty && !shouldShowLikedSongs) || _isSearching) {
@@ -599,6 +596,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           itemBuilder: (context, index) {
             // Show liked songs first if it has songs
             if (shouldShowLikedSongs && index == 0) {
+              // Create a virtual liked songs playlist for display
+              final likedSongsPlaylist = Playlist.system(
+                name: 'Liked Songs',
+                description: 'Your liked songs',
+                colorTheme: '#FF0040',
+              ).copyWith(songIds: favorites.toList());
               return _buildSpotifyStylePlaylistCard(likedSongsPlaylist);
             }
             
@@ -690,11 +693,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _shouldShowPlaylistsSection() {
     final playlists = ref.watch(playlistsProvider);
     final userPlaylists = playlists.where((p) => !p.isSystemPlaylist).toList();
-    final likedSongsPlaylist = playlists.firstWhere(
-      (p) => p.name == 'Liked Songs' && p.isSystemPlaylist,
-      orElse: () => Playlist.system(name: 'Liked Songs'),
-    );
-    final shouldShowLikedSongs = likedSongsPlaylist.songIds.isNotEmpty;
+    final favorites = ref.watch(favoritesProvider);
+    final shouldShowLikedSongs = favorites.isNotEmpty;
     
     return (userPlaylists.isNotEmpty || shouldShowLikedSongs) && !_isSearching;
   }

@@ -49,6 +49,8 @@ class _SongListTileState extends ConsumerState<SongListTile>
 
     final currentSong = ref.watch(currentSongProvider).value;
     final isCurrentlyPlaying = currentSong?.id == widget.song.id;
+    final favorites = ref.watch(favoritesProvider);
+    final isFavorite = favorites.contains(widget.song.id);
 
     return Semantics(
       label: 'Song: ${widget.song.title} by ${widget.song.artist}',
@@ -112,9 +114,9 @@ class _SongListTileState extends ConsumerState<SongListTile>
                         ),
 
                         // Additional info row
-                        if (widget.song.isFavorite)
+                        if (isFavorite)
                           const SizedBox(height: 4),
-                        if (widget.song.isFavorite)
+                        if (isFavorite)
                           _buildAdditionalInfo(),
                       ],
                     ),
@@ -335,12 +337,19 @@ class _SongListTileState extends ConsumerState<SongListTile>
             const SizedBox(height: 24),
 
             // Options
-            _buildOptionTile(
-              icon: widget.song.isFavorite ? Icons.favorite : Icons.favorite_border,
-              title: widget.song.isFavorite ? 'Remove from favorites' : 'Add to favorites',
-              onTap: () {
-                Navigator.pop(context);
-                _toggleFavorite();
+            Consumer(
+              builder: (context, ref, child) {
+                final favorites = ref.watch(favoritesProvider);
+                final isFavorite = favorites.contains(widget.song.id);
+                
+                return _buildOptionTile(
+                  icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+                  title: isFavorite ? 'Remove from liked songs' : 'Add to liked songs',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _toggleFavorite();
+                  },
+                );
               },
             ),
             _buildOptionTile(
@@ -492,22 +501,18 @@ class _SongListTileState extends ConsumerState<SongListTile>
     try {
       HapticFeedback.lightImpact();
 
-      final updatedSong = widget.song.toggleFavorite();
-      ref.read(songsProvider.notifier).updateSong(updatedSong);
+      final favorites = ref.read(favoritesProvider);
+      final isCurrentlyFavorite = favorites.contains(widget.song.id);
 
-      // Update liked songs playlist
-      if (updatedSong.isFavorite) {
-        ref.read(storageServiceProvider).addToLikedSongs(updatedSong.id);
-      } else {
-        ref.read(storageServiceProvider).removeFromLikedSongs(updatedSong.id);
-      }
+      // Use the centralized favorites management
+      ref.read(favoritesProvider.notifier).toggleFavorite(widget.song.id);
 
       _loggingService.logInfo('Toggled favorite for: ${widget.song.title}');
 
       _showSuccessSnackBar(
-          widget.song.isFavorite
-              ? 'Removed from liked songs'
-              : 'Added to liked songs'
+          !isCurrentlyFavorite
+              ? 'Added to liked songs'
+              : 'Removed from liked songs'
       );
     } catch (e, stackTrace) {
       _loggingService.logError('Error toggling favorite', e, stackTrace);
